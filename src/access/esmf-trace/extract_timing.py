@@ -1,9 +1,12 @@
+import os
 from pathlib import Path
 from collections import defaultdict
-import bt2
-from staging import open_selected_streams
-from utils import is_event, event_ts_ns, event_field
+from contextlib import contextmanager
+import shutil
+import tempfile
 import pandas as pd
+import bt2
+from bt2_utils import is_event, event_ts_ns, event_field
 
 
 def rows_from_bt2_iterator(it: iter, *, pet_whitelist: set[int] | None = None) -> list:
@@ -21,7 +24,7 @@ def rows_from_bt2_iterator(it: iter, *, pet_whitelist: set[int] | None = None) -
             continue
 
         event = msg.event
-        pet_id = event.stream.id # stream id is the pet id
+        pet_id = event.stream.id # stream.id is the pet id
 
         if pet_whitelist is not None and pet_id not in pet_whitelist:
             continue
@@ -67,12 +70,23 @@ def rows_from_bt2_iterator(it: iter, *, pet_whitelist: set[int] | None = None) -
                 out.append(frame)
     return out
 
+
+def _suffix_int_from_stream_path(sp: Path) -> int | None:
+    """
+    Extract the pet index from a stream path like 'esmf_stream_0000'
+    """
+    name = Path(sp).name
+    try:
+        return int(name.split("_")[-1])
+    except ValueError:
+        return None
+
 def df_for_selected_streams(
-    trace_root: Path, 
-    stream_paths: iter, 
+    traceout_path: Path, 
+    stream_paths: list[Path], 
     pets: int|list|None = None, 
     *,
-    merge_adjacent: bool = True, 
+    merge_adjacent: bool = False, 
     merge_gap_ns: int = 1000
     ) -> pd.DataFrame:
     """
@@ -84,17 +98,34 @@ def df_for_selected_streams(
         pet_whitelist = {pets}
     else:
         pet_whitelist = set(pets)
-    
-    # parse from the subset iterator
-    with open_selected_streams(trace_root, stream_paths) as it:
-        rows = rows_from_bt2_iterator(it, pet_whitelist=pet_whitelist)
 
-    df = pd.DataFrame(rows, columns=['component', 'start', 'end', 'duration', 'depth', 'pet'])
+    all_rows = []
+
+    for sp in stream_paths:
+        label = _suffix_int_from_stream_path(sp)
+        if pet_whitelist is not None and label not in pet_whitelist:
+            print(f"-- skipping stream {sp} (pet {label}) not in whitelist")
+            continue
+
+        # parse from the iterator
+        with open_selected_streams(traceout_path, [sp]) as it:
+            rows = rows_from_bt2_iterator(it, pet_whitelist=None)
+
+            for r in rows:
+                r["pet"] = label
+            all_rows.extend(rows)
+
+    df = pd.DataFrame(all_rows, columns=['component', 'start', 'end', 'duration', 'depth', 'pet'])
+
+    print("-- pets:", sorted(df["pet"].unique().tolist()))
+
     if df.empty:
         return df
 
+    df = df.sort_values(["pet", "start"]).reset_index(drop=True)
+
     if not merge_adjacent:
-        return df.sort_values(by=['pet', 'start']).reset_index(drop=True)
+        return df
 
     # merge adjacent spans on the same pet/component/depth
     df = df.sort_values(["pet", "start"]).reset_index(drop=True)
@@ -118,3 +149,33 @@ def df_for_selected_streams(
     if current is not None:
         merged.append(current)
     return pd.DataFrame(merged, columns=['component', 'start', 'end', 'duration', 'depth', 'pet'])
+
+
+@contextmanager
+def open_selected_streams(traceout_path: Path, stream_paths: iter):
+    """
+    Context manager to open a temporary bundle that includes:
+      - the original 'metadata'
+      - the selected stream files (symlinked by basename)
+    """
+    traceout_path = Path(traceout_path).expanduser().resolve()
+    meta = traceout_path / "metadata"
+    if not meta.is_file():
+        raise FileNotFoundError(f"traceout metadata not found at: {meta}")
+    streams = [Path(s).expanduser().resolve() for s in stream_paths]
+    if not streams:
+        raise ValueError("no stream paths provided!")
+    for s in streams:
+        if not s.is_file():
+            raise FileNotFoundError(f"stream file not found at: {s}")
+
+    tmpdir = Path(tempfile.mkdtemp(prefix="ctf_stage_")).resolve()
+    try:
+        # link metadata and the selected streams into the temp bundle
+        os.symlink(meta, tmpdir / "metadata", target_is_directory=False)
+        for s in streams:
+            os.symlink(s, tmpdir / s.name, target_is_directory=False)
+
+        yield bt2.TraceCollectionMessageIterator(str(tmpdir))
+    finally:
+        shutil.rmtree(tmpdir, ignore_errors=True)
