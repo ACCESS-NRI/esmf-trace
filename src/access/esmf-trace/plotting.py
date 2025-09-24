@@ -11,11 +11,12 @@ def plot_flame_graph(
     df: pd.DataFrame,
     pets: int|list|None = None,
     *,
-    as_datetime: bool = False,
+    xaxis_datetime: bool = False,
     separate_plots: bool = False,
     cmap_name: str = "tab20",
     renderer: str | None = None,
-    output_html: Path | None = None
+    show_html: bool = False,
+    write_to_html: Path | None = None
     ):
     """
     Interactive flame graph for one or more pets.
@@ -32,7 +33,7 @@ def plot_flame_graph(
     df = df[df["pet"].isin(pets)].copy()
     if df.empty:
         raise ValueError("no data for the selected pets")
-    
+
     components = sorted(df["component"].unique())
     cmap = colormaps.get_cmap(cmap_name).resampled(len(components))
     colours = {
@@ -57,7 +58,7 @@ def plot_flame_graph(
         yaxis_kwargs = dict(autorange="reversed")
 
     # xaxis columns
-    if as_datetime:
+    if xaxis_datetime:
         df["x_start"] = pd.to_datetime(df["start"], unit="ns")
         df["x_end"] = pd.to_datetime(df["end"], unit="ns")
         df["duration_s"] = df["duration"] / 1e9
@@ -67,7 +68,7 @@ def plot_flame_graph(
         df["x_end"] = df["x_start"] + df["duration"] / 1e9
 
     # plot
-    if as_datetime:
+    if xaxis_datetime:
         fig = px.timeline(
             df,
             x_start="x_start",
@@ -76,8 +77,8 @@ def plot_flame_graph(
             category_orders={y_col: cat_order} if multi_overlay else None,
             color="component",
             color_discrete_map=colours,
-            separate_plots_col="pet" if separate_plots and len(pets) > 1 else None,
-            separate_plots_col_wrap=2 if separate_plots else None,
+            facet_col="pet" if separate_plots and len(pets) > 1 else None,
+            facet_col_wrap=2 if separate_plots else None,
             hover_data={
                 "component": True,
                 "duration_s": ":.6f",
@@ -102,7 +103,7 @@ def plot_flame_graph(
             pet_subplot = {p: divmod(i, cols) for i, p in enumerate(pets)}
         else:
             fig = go.Figure()
-            
+
             for p in pets:
                 sub = df[df["pet"] == p]
                 for comp, grp in sub.groupby("component", sort=False):
@@ -160,10 +161,12 @@ def plot_flame_graph(
     if renderer:
         pio.renderers.default = renderer
 
-    if output_html:
-        out = Path(output_html)
+    if write_to_html:
+        out = Path(write_to_html)
         out.parent.mkdir(parents=True, exist_ok=True)
         fig.write_html(str(out), include_plotlyjs="cdn")
 
-    fig.show()
+    if show_html:
+        fig.show()
+
     return fig
