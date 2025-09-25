@@ -21,6 +21,7 @@ def cmd_run(args):
         pets=pets,
         merge_adjacent=args.merge_adjacent,
         merge_gap_ns=merge_gap_ns,
+        max_depth=args.max_depth,
     )
 
     if df.empty:
@@ -72,6 +73,12 @@ def main():
         type=Path,
         default=None,
         help="Output CSV file path"
+    )
+    parser.add_argument(
+        "--max-depth",
+        type=int,
+        default=5,
+        help="Only keep spans with stack depth up to N (default: 5).",
     )
     parser.add_argument(
         "--merge-adjacent",
