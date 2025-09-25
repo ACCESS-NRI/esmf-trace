@@ -87,7 +87,8 @@ def df_for_selected_streams(
     pets: int|list|None = None, 
     *,
     merge_adjacent: bool = False, 
-    merge_gap_ns: int = 1000
+    merge_gap_ns: int = 1000,
+    max_depth: int | None = None,
     ) -> pd.DataFrame:
     """
     Columns: ['component', 'start', 'end', 'duration', 'depth', 'pet']
@@ -123,6 +124,12 @@ def df_for_selected_streams(
         return df
 
     df = df.sort_values(["pet", "start"]).reset_index(drop=True)
+
+    if max_depth is not None:
+        # keep only rows up to max_depth
+        df = df[df["depth"] <= max_depth].reset_index(drop=True)
+        if df.empty:
+            return df
 
     if not merge_adjacent:
         return df
