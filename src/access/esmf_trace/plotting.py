@@ -6,7 +6,7 @@ import plotly.io as pio
 from plotly.subplots import make_subplots
 import matplotlib.pyplot as plt
 from matplotlib import colormaps
-
+from common_vars import seconds_to_nanoseconds
 
 def plot_flame_graph(
     df: pd.DataFrame,
@@ -61,11 +61,11 @@ def plot_flame_graph(
     if xaxis_datetime:
         df["x_start"] = pd.to_datetime(df["start"], unit="ns")
         df["x_end"] = pd.to_datetime(df["end"], unit="ns")
-        df["duration_s"] = df["duration_s"] / 1e9
+        df["duration_s"] = df["duration_s"] / seconds_to_nanoseconds # seconds
     else:
         origin_ns = df["start"].min()
-        df["x_start"] = (df["start"] - origin_ns) / 1e9 # seconds
-        df["x_end"] = df["x_start"] + df["duration_s"] / 1e9 # seconds
+        df["x_start"] = (df["start"] - origin_ns) / seconds_to_nanoseconds # seconds
+        df["x_end"] = df["x_start"] + df["duration_s"] / seconds_to_nanoseconds # seconds
 
     # plot
     if xaxis_datetime:
@@ -181,7 +181,7 @@ def insta_timeseries(ts: pd.DataFrame, out_png: Path, xaxis_datetime=False):
         unit = "ns" if pd.notna(smax) and smax > 1e12 else "s"
         df_timeseries["x"] = pd.to_datetime(df_timeseries["start"], unit=unit)
     else:
-        df_timeseries["x"] = (df_timeseries["start"] - df_timeseries["start"].min()) / 1e9  # seconds
+        df_timeseries["x"] = (df_timeseries["start"] - df_timeseries["start"].min()) / seconds_to_nanoseconds  # seconds
 
     plt.figure(figsize=(10,6))
     for (c, p), sub in df_timeseries.groupby(["model_component","pet"]):

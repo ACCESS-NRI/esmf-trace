@@ -1,0 +1,1 @@
+seconds_to_nanoseconds = 1e9

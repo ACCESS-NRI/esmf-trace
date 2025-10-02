@@ -1,6 +1,6 @@
 import re
 import pandas as pd
-
+from common_vars import seconds_to_nanoseconds
 
 def prepare_view(
     df: pd.DataFrame,
@@ -14,7 +14,7 @@ def prepare_view(
     """
     out = df.copy()
 
-    out["duration_s"] = out["duration_s"] / 1e9 # seconds
+    out["duration_s"] = out["duration_s"] / seconds_to_nanoseconds # seconds
 
     if model_component is not None:
         out = out[out["model_component"].isin(set(model_component))]
