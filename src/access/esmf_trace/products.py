@@ -65,7 +65,7 @@ def compute_products(
 
     return products
 
-def write_products_to_files(
+def save_products_to_files(
     outdir: Path,
     products: dict[str, pd.DataFrame | None],
     base_prefix: str

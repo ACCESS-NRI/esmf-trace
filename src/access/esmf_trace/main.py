@@ -4,7 +4,7 @@ from pathlib import Path
 import pandas as pd
 from utils import extract_pets, construct_stream_paths
 from extract_timing import df_for_selected_streams
-from products import compute_products, write_products_to_files, save_product_plots
+from products import compute_products, save_products_to_files, save_product_plots
 
 
 def _require_outdir(args: argparse.Namespace) -> Path:
@@ -57,12 +57,12 @@ def run(args):
     # Save stats
     if args.collect_stats and products is not None:
         outdir = _require_outdir(args)
-        write_products_to_files(outdir=outdir, products=products, base_prefix=args.base_prefix)
+        save_products_to_files(outdir=outdir, products=products, base_prefix=args.base_prefix)
 
     # Save plots
     if args.plotting:
         outdir = _require_outdir(args)
-        save_plots(
+        save_product_plots(
             outdir=outdir,
             products=products,
             df=df,
