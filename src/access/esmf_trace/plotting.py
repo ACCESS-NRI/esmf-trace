@@ -4,19 +4,19 @@ import plotly.express as px
 import plotly.graph_objects as go
 import plotly.io as pio
 from plotly.subplots import make_subplots
+import matplotlib.pyplot as plt
 from matplotlib import colormaps
 
 
 def plot_flame_graph(
     df: pd.DataFrame,
     pets: int|list|None = None,
-    *,
     xaxis_datetime: bool = False,
     separate_plots: bool = False,
     cmap_name: str = "tab20",
     renderer: str | None = None,
     show_html: bool = False,
-    write_to_html: Path | None = None
+    html_path: Path | None = None
     ):
     """
     Interactive flame graph for one or more pets.
@@ -24,17 +24,17 @@ def plot_flame_graph(
 
     if "pet" not in df.columns:
         df = df.assign(pet=0)
-    
+
     if pets is None:
         pets = sorted(df["pet"].unique())
     elif isinstance(pets, int):
         pets = [pets]
-    
+
     df = df[df["pet"].isin(pets)].copy()
     if df.empty:
         raise ValueError("no data for the selected pets")
 
-    components = sorted(df["component"].unique())
+    components = sorted(df["model_component"].unique())
     cmap = colormaps.get_cmap(cmap_name).resampled(len(components))
     colours = {
         c: f"rgb({int(r*255)},{int(g*255)},{int(b*255)})"
@@ -61,11 +61,11 @@ def plot_flame_graph(
     if xaxis_datetime:
         df["x_start"] = pd.to_datetime(df["start"], unit="ns")
         df["x_end"] = pd.to_datetime(df["end"], unit="ns")
-        df["duration_s"] = df["duration"] / 1e9
+        df["duration_s"] = df["duration_s"] / 1e9
     else:
         origin_ns = df["start"].min()
-        df["x_start"] = (df["start"] - origin_ns) / 1e9
-        df["x_end"] = df["x_start"] + df["duration"] / 1e9
+        df["x_start"] = (df["start"] - origin_ns) / 1e9 # seconds
+        df["x_end"] = df["x_start"] + df["duration_s"] / 1e9 # seconds
 
     # plot
     if xaxis_datetime:
@@ -103,10 +103,9 @@ def plot_flame_graph(
             pet_subplot = {p: divmod(i, cols) for i, p in enumerate(pets)}
         else:
             fig = go.Figure()
-
             for p in pets:
                 sub = df[df["pet"] == p]
-                for comp, grp in sub.groupby("component", sort=False):
+                for comp, grp in sub.groupby("model_component", sort=False):
                     bar = go.Bar(
                         y=grp[y_col],
                         x=grp["width"],
@@ -161,12 +160,39 @@ def plot_flame_graph(
     if renderer:
         pio.renderers.default = renderer
 
-    if write_to_html:
-        out = Path(write_to_html)
-        out.parent.mkdir(parents=True, exist_ok=True)
-        fig.write_html(str(out), include_plotlyjs="cdn")
+    html_path = Path(html_path)
+    html_path.parent.mkdir(parents=True, exist_ok=True)
+    fig.write_html(str(html_path), include_plotlyjs="cdn")
 
     if show_html:
         fig.show()
 
     return fig
+
+
+def insta_timeseries(ts: pd.DataFrame, out_png: Path, xaxis_datetime=False):
+    need = {"start", "model_component", "pet", "duration_s"}
+    if (need - set(ts.columns)):
+        raise ValueError("ts must have: start, model_component, pet, duration_s")
+
+    df_timeseries = ts.copy()
+    if xaxis_datetime:
+        smax = pd.to_numeric(df_timeseries["start"], errors="coerce").max()
+        unit = "ns" if pd.notna(smax) and smax > 1e12 else "s"
+        df_timeseries["x"] = pd.to_datetime(df_timeseries["start"], unit=unit)
+    else:
+        df_timeseries["x"] = (df_timeseries["start"] - df_timeseries["start"].min()) / 1e9  # seconds
+
+    plt.figure(figsize=(10,6))
+    for (c, p), sub in df_timeseries.groupby(["model_component","pet"]):
+        sub = sub.sort_values("x")
+        label = f"{c.split('/')[-1]}-PET{p}"
+        plt.plot(sub["x"], sub["duration_s"], marker="o", label=label)
+
+    plt.xlabel("Time" if xaxis_datetime else "Time (s)")
+    plt.ylabel("duration_s (s)")
+    plt.title("RunPhase1 duration_s comparison")
+    plt.legend(ncol=2, fontsize=9)
+    plt.tight_layout()
+    plt.savefig(out_png, dpi=150)
+    plt.close()
