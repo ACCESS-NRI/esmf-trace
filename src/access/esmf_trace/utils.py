@@ -1,26 +1,34 @@
 from pathlib import Path
 import pandas as pd
 
+def _expand_from_str_to_list(str_of_ints) -> list[int]:
+    """
+    Expand a str of int(s) like '5' or '3-7'into a list of ints.
+    """
+    str_of_ints = str_of_ints.strip()
+    if not str_of_ints:
+        return []
+    
+    if "-" in str_of_ints:
+        start_s, end_s = str_of_ints.split("-", 1)
+        start = int(start_s.strip())
+        end = int(end_s.strip())
+        return list(range(start, end + 1))
+    return [int(str_of_ints)]
 
-def parse_stream_pet_indices(stream_pet_str: str) -> int:
+def extract_pets(pets_str: str | None) -> int | list[int] | None:
     """
-    Parse indices like '0,3-5,8' which gives [0,3,4,5,8]
+    Extract pet like '0,3-5,8' -> [0,3,4,5,8].
+    If pets_str is None or empty/whitespace, return None (meaning: all pets).
     """
-    pets = []
-    for part in stream_pet_str.split(","):
-        if "-" in part:
-            start, end = part.split("-", 1)
-            pets.extend(range(int(start), int(end)+1))
-        else:
-            pets.append(int(part))
-    return sorted(set(pets))
+    if pets_str is None or not pets_str.strip():
+        return None
 
-def parse_pets(pets_str: str | None) -> int | list[int] | None:
-    """
-    Parse indices like '0,3-5,8' which gives [0,3,4,5,8];
-    Or None means all pets - not recommanded for large traces - very very very slow!
-    """
-    return None if pets_str is None else sorted(set(parse_stream_pet_indices(pets_str)))
+    parts = pets_str.split(",")
+    out: list[int] = []
+    for part in parts:
+        out.extend(_expand_from_str_to_list(part))
+    return sorted(set(out))
 
 def construct_stream_paths(
     traceout_path: Path,
