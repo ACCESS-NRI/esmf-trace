@@ -1,6 +1,10 @@
 import re
 import pandas as pd
-from common_vars import seconds_to_nanoseconds
+try:
+    # when imported as access.esmf_trace.stats
+    from .common_vars import seconds_to_nanoseconds
+except ImportError:
+    from common_vars import seconds_to_nanoseconds
 
 def prepare_view(
     df: pd.DataFrame,
