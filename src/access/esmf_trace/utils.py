@@ -1,5 +1,39 @@
 from pathlib import Path
-import pandas as pd
+
+
+def output_name_to_index(p: str | Path) -> int | None:
+    """
+    'output003' -> 3
+    """
+    name = p.name if isinstance(p, Path) else str(p)
+    if name.startswith("output"):
+        try:
+            return int(name.replace("output", ""))
+        except ValueError:
+            return None
+    return None
+
+def output_dir_to_index(p: Path) -> int | None:
+    return output_name_to_index(p.name)
+
+def extract_index_list(s: str | None) -> list[int] | None:
+    """
+    Parse '0,2-4,9' -> [0,2,3,4,9]
+    """
+    if not s:
+        return None
+    out = set()
+    for part in s.split(","):
+        part = part.strip()
+        if not part:
+            continue
+        if "-" in part:
+            a, b = part.split("-", 1)
+            start = int(a.strip()); end = int(b.strip())
+            out.update(range(start, end + 1))
+        else:
+            out.add(int(part))
+    return sorted(out)
 
 def _expand_from_str_to_list(str_of_ints) -> list[int]:
     """
@@ -8,7 +42,7 @@ def _expand_from_str_to_list(str_of_ints) -> list[int]:
     str_of_ints = str_of_ints.strip()
     if not str_of_ints:
         return []
-    
+
     if "-" in str_of_ints:
         start_s, end_s = str_of_ints.split("-", 1)
         start = int(start_s.strip())
@@ -30,24 +64,26 @@ def extract_pets(pets_str: str | None) -> int | list[int] | None:
         out.extend(_expand_from_str_to_list(part))
     return sorted(set(out))
 
+def discover_pet_indices(traceout_path: Path, prefix: str) -> list[int]:
+    """
+    Discover pet indices from traceout directory.
+    """
+    traceout_path = Path(traceout_path).expanduser().resolve()
+    pets = []
+    for p in traceout_path.glob(f"{prefix}_*"):
+        try:
+            pets.append(int(p.name.split("_")[-1]))
+        except ValueError:
+            pass
+    return sorted(set(pets))
+
 def construct_stream_paths(
     traceout_path: Path,
     pet_indices: list[int],
     prefix: str="esmf_stream"
-    ) -> list[str]:
+    ) -> list[Path]:
     """
     Build stream paths from traceout path and pet indices.
     """
     traceout_path = Path(traceout_path).expanduser().resolve()
     return [traceout_path / f"{prefix}_{p:04d}" for p in pet_indices]
-
-# The raw output may not be useful, so commenting out for now.
-# def write_df(df: pd.DataFrame, output_path: Path) -> None:
-#     # TODO: currently only CSV supported, maybe adding others?
-#     output_path.parent.mkdir(parents=True, exist_ok=True)
-#     if output_path.suffix.lower() == ".csv":
-#         df.to_csv(output_path, index=False)
-#         print(f"wrote {output_path} to file!")
-#     else:
-#         raise ValueError(f"unsupported output file type: {output_path.suffix}"
-# )

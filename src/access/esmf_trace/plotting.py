@@ -4,9 +4,8 @@ import plotly.express as px
 import plotly.graph_objects as go
 import plotly.io as pio
 from plotly.subplots import make_subplots
-import matplotlib.pyplot as plt
 from matplotlib import colormaps
-from common_vars import seconds_to_nanoseconds
+from .common_vars import seconds_to_nanoseconds
 
 def plot_flame_graph(
     df: pd.DataFrame,
@@ -75,7 +74,7 @@ def plot_flame_graph(
             x_end="x_end",
             y=y_col,
             category_orders={y_col: cat_order} if multi_overlay else None,
-            color="component",
+            color="model_component",
             color_discrete_map=colours,
             facet_col="pet" if separate_plots and len(pets) > 1 else None,
             facet_col_wrap=2 if separate_plots else None,
@@ -100,7 +99,7 @@ def plot_flame_graph(
                 vertical_spacing=0.1 if rows > 1 else 0.15,
                 horizontal_spacing=0.1 if cols > 1 else 0.15,
             )
-            pet_subplot = {p: divmod(i, cols) for i, p in enumerate(pets)}
+            pet_to_rc = {p: (i // cols + 1, i % cols + 1) for i, p in enumerate(pets)}
         else:
             fig = go.Figure()
             for p in pets:
@@ -127,11 +126,11 @@ def plot_flame_graph(
                         showlegend=bool(p == pets[0]),
                     )
                     if separate_plots and len(pets) > 1:
-                        r, c = next(pet_subplot(p))
-                        fig.add_trace(bar, row=r+1, col=c+1)
+                        r, c = pet_to_rc[p]
+                        fig.add_trace(bar, row=r, col=c)
                     else:
                         fig.add_trace(bar)
-        
+
         fig.update_xaxes(
             title="Seconds since first event",
             showgrid=True,
@@ -168,31 +167,3 @@ def plot_flame_graph(
         fig.show()
 
     return fig
-
-
-def insta_timeseries(ts: pd.DataFrame, out_png: Path, xaxis_datetime=False):
-    need = {"start", "model_component", "pet", "duration_s"}
-    if (need - set(ts.columns)):
-        raise ValueError("ts must have: start, model_component, pet, duration_s")
-
-    df_timeseries = ts.copy()
-    if xaxis_datetime:
-        smax = pd.to_numeric(df_timeseries["start"], errors="coerce").max()
-        unit = "ns" if pd.notna(smax) and smax > 1e12 else "s"
-        df_timeseries["x"] = pd.to_datetime(df_timeseries["start"], unit=unit)
-    else:
-        df_timeseries["x"] = (df_timeseries["start"] - df_timeseries["start"].min()) / seconds_to_nanoseconds  # seconds
-
-    plt.figure(figsize=(10,6))
-    for (c, p), sub in df_timeseries.groupby(["model_component","pet"]):
-        sub = sub.sort_values("x")
-        label = f"{c.split('/')[-1]}-PET{p}"
-        plt.plot(sub["x"], sub["duration_s"], marker="o", label=label)
-
-    plt.xlabel("Time" if xaxis_datetime else "Time (s)")
-    plt.ylabel("duration_s (s)")
-    plt.title("RunPhase1 duration_s comparison")
-    plt.legend(ncol=2, fontsize=9)
-    plt.tight_layout()
-    plt.savefig(out_png, dpi=150)
-    plt.close()

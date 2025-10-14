@@ -1,0 +1,6 @@
+pandas
+pyarrow
+numpy
+xarray
+matplotlib
+jupyter
