@@ -6,7 +6,7 @@ import shutil
 import tempfile
 import pandas as pd
 import bt2
-from bt2_utils import is_event, event_ts_ns, parse_define_region, parse_region_transition
+from .bt2_utils import is_event, event_ts_ns, parse_define_region, parse_region_transition
 
 
 def rows_from_bt2_iterator(it: iter, *, pet_whitelist: set[int] | None = None) -> list:
@@ -150,16 +150,16 @@ def df_for_selected_streams(
     cols = ["model_component", "start", "end", "duration_s", "depth", "pet"]
     df = pd.DataFrame(all_rows, columns=cols)
 
-    print("-- pets:", sorted(df["pet"].unique().tolist()))
-
     if df.empty:
-        return df
+        raise ValueError(f"-- No events parsed from {len(stream_paths)} stream(s) under {traceout_path}.")
+
+    # print("-- pets:", sorted(df["pet"].unique().tolist()))
 
     if max_depth is not None:
         # keep only rows up to max_depth
         df = df[df["depth"] <= max_depth].reset_index(drop=True)
         if df.empty:
-            return df
+            raise ValueError(f"-- All events were filtered out by max_depth={max_depth}, try increasing max_depth or removing the filter.")
 
     if not merge_adjacent:
         return df
