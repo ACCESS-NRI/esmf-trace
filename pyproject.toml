@@ -1,0 +1,65 @@
+[project]
+name = "esmf-trace"
+dynamic = ["version"]
+description = "Analyse and visualise ESMF CTF trace outputs"
+authors = [
+  { name = "Minghang Li", email = "Minghang.Li1@anu.edu.au" }
+]
+readme = "README.md"
+keywords = ["esmf", "nuopc", "babeltrace2", "profiling", "flame graph"]
+license = { text = "Apache-2.0" }
+classifiers = [
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Topic :: Utilities",
+]
+
+dependencies = [
+  "pandas",
+  "plotly",
+  "matplotlib",
+  "ruamel.yaml",
+  "pyarrow"
+]
+
+[build-system]
+requires = ["setuptools>=80", "setuptools_scm[toml]>=8", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[project.scripts]
+esmf-trace = "access.esmf_trace.main:main"
+
+[project.urls]
+Homepage = "https://github.com/ACCESS-NRI/esmf-trace"
+
+[project.optional-dependencies]
+devel = [
+    "flake8",
+    "black",
+    "pre-commit",
+]
+test = [
+    "pytest",
+    "pytest-cov",
+]
+
+[tool.pytest.ini_options]
+addopts = [
+  "--cov=experiment_generator",
+  "--cov-report=term",
+  "--cov-report=html",
+  "--cov-report=xml"
+]
+testpaths = ["tests"]
+
+[tool.coverage.run]
+
+[tool.black]
+line-length = 120
+
+[tool.flake8]
+max-line-length = 120
