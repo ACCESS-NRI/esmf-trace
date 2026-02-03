@@ -19,6 +19,11 @@ jobs:
       with:
         args: "format --check --diff"
 
+    - name: Ruff lint
+      uses: astral-sh/ruff-action@v3
+      with:
+        args: "check"
+
   pypa-build:
     name: PyPA build
     runs-on: ubuntu-latest
