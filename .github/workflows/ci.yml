@@ -32,26 +32,3 @@ jobs:
 
       - run: |
           python3 -m pip install --upgrade build && python3 -m build
-
-  conda-build:
-    name: Conda Build
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup conda environment
-        uses: conda-incubator/setup-miniconda@835234971496cad1653abb28a638a281cf32541f # v3.2.0
-        with:
-          miniconda-version: "latest"
-          python-version: ${{ env.PY_VERSION_BUILD }}
-          environment-file: conda/environment.yml
-          auto-update-conda: false
-          auto-activate-base: false
-          show-channel-urls: true
-
-      - name: Build conda package
-        uses: ACCESS-NRI/action-build-and-upload-conda-packages@v3.0.0
-        with:
-          meta_yaml_dir: conda
-          label: main
-          upload: false
