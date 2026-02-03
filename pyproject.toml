@@ -38,8 +38,7 @@ Homepage = "https://github.com/ACCESS-NRI/esmf-trace"
 
 [project.optional-dependencies]
 devel = [
-    "flake8",
-    "black",
+    "ruff",
     "pre-commit",
 ]
 test = [
@@ -49,7 +48,7 @@ test = [
 
 [tool.pytest.ini_options]
 addopts = [
-  "--cov=experiment_generator",
+  "--cov=esmf_trace",
   "--cov-report=term",
   "--cov-report=html",
   "--cov-report=xml"
@@ -58,8 +57,8 @@ testpaths = ["tests"]
 
 [tool.coverage.run]
 
-[tool.black]
+[tool.ruff]
 line-length = 120
 
-[tool.flake8]
-max-line-length = 120
+[tool.ruff.lint]
+select = ["E", "F", "B", "C4", "SIM", "PTH", "UP", "I", "N", "C901"]
