@@ -33,7 +33,7 @@ requirements:
 
 test:
     imports:
-        - esmf_trace
+        - access/esmf_trace
 
 about:
     home: https://github.com/ACCESS-NRI/esmf-trace/
