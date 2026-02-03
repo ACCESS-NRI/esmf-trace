@@ -1,16 +1,18 @@
 import argparse
-from dataclasses import dataclass
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
+
 import psutil
-from .utils import output_name_to_index, extract_index_list
+
+from .config import ConfigError, DefaultSettings, RunSettings
 from .run import run as single_run
-from .config import DefaultSettings, RunSettings, ConfigError
+from .utils import extract_index_list, output_name_to_index
 
 
 def _find_traceout_dir(output_dir: Path, stream_prefix: str) -> Path | None:
     tdir = output_dir / "traceout"
     return tdir if (tdir.is_dir() and any(tdir.glob(f"{stream_prefix}_*"))) else None
+
 
 def _expected_outputs_exist(post_dir: Path, base_prefix: str) -> bool:
     expected = [
@@ -18,6 +20,7 @@ def _expected_outputs_exist(post_dir: Path, base_prefix: str) -> bool:
         post_dir / f"{base_prefix}_flamegraph.html",
     ]
     return all(p.exists() for p in expected)
+
 
 def _gather_outputs(archive_dir: Path, output_index: str | None) -> list[Path]:
     if not archive_dir.is_dir():
@@ -36,17 +39,20 @@ def _gather_outputs(archive_dir: Path, output_index: str | None) -> list[Path]:
         output_dirs = [p for p in output_dirs if output_name_to_index(p) in sel]
     return output_dirs
 
+
 def _build_namespace(job_kwargs: dict) -> argparse.Namespace:
     """
     Convert a kwargs dict to an argparse.Namespace which is compatible with run.run()
     """
     return argparse.Namespace(**job_kwargs)
 
+
 def run_one_job(ns: argparse.Namespace) -> tuple[int, str]:
     try:
         return single_run(ns)
     except Exception as e:
         return (1, f"Failed: {e}")
+
 
 def run_batch_jobs(defaults: DefaultSettings, runs: list[RunSettings]) -> None:
     """
@@ -66,7 +72,7 @@ def run_batch_jobs(defaults: DefaultSettings, runs: list[RunSettings]) -> None:
         exact_path = run._resolve_exact_paths()
         if not exact_path:
             raise ConfigError(f"-- cannot resolve {exact_path}, please check config!")
-        
+
         base_prefix = run.base_prefix
         post_base_path = run._effective_post_base_path(defaults)
         post_base_path.mkdir(parents=True, exist_ok=True)
@@ -74,7 +80,7 @@ def run_batch_jobs(defaults: DefaultSettings, runs: list[RunSettings]) -> None:
         output_dirs = _gather_outputs(exact_path, run.output_index)
         if not output_dirs:
             raise ValueError(f"-- no output* dirs found under {exact_path}")
-        
+
         for outdir in output_dirs:
             # print(f"-- processing {outdir}")
 
@@ -85,18 +91,16 @@ def run_batch_jobs(defaults: DefaultSettings, runs: list[RunSettings]) -> None:
             post_dir = post_base_path / f"postprocessing_{base_prefix}" / outdir.name
 
             if _expected_outputs_exist(post_dir, base_prefix):
-                print(f"-- skip postprocessing, expected outputs already exist in {post_dir.relative_to(post_base_path)}")
+                print(
+                    f"-- skip postprocessing, expected outputs already exist in {post_dir.relative_to(post_base_path)}"
+                )
                 continue
 
             post_dir.mkdir(parents=True, exist_ok=True)
 
-            job_kwargs = run.to_job_kwargs(
-                defaults=defaults,
-                traceout_path=traceout_path,
-                post_dir=post_dir
-            )
+            job_kwargs = run.to_job_kwargs(defaults=defaults, traceout_path=traceout_path, post_dir=post_dir)
             ns = _build_namespace(job_kwargs)
-            jobs.append( (ns, post_dir))
+            jobs.append((ns, post_dir))
 
     if not jobs:
         print("-- No jobs to run. All done or nothing to do.")

@@ -1,9 +1,12 @@
 import argparse
 import json
 from pathlib import Path
+
 import pandas as pd
-from .utils import output_name_to_index, output_dir_to_index, extract_index_list, extract_pets
+
 from .tmp_yaml_parser import read_yaml
+from .utils import extract_pets, output_dir_to_index, output_name_to_index
+
 
 def _load_timeseries_json(p: Path) -> pd.DataFrame:
     """
@@ -12,7 +15,7 @@ def _load_timeseries_json(p: Path) -> pd.DataFrame:
     Layout:
       <post_base_path>/<case_name>/outputNNN/<base_prefix>_timeseries.json
     """
-    with open(p, "r") as f:
+    with p.open() as f:
         df = pd.DataFrame(json.load(f))
 
     output_name = p.parent.name  # "output000"
@@ -69,14 +72,11 @@ def _collect_case_jsons(
         print(f"-- warning: case dir not found: {case_dir}")
         return []
 
-    outputs = [
-        p for p in case_dir.glob("output*")
-        if p.is_dir() and output_dir_to_index(p) is not None
-    ]
+    outputs = [p for p in case_dir.glob("output*") if p.is_dir() and output_dir_to_index(p) is not None]
     outputs.sort(key=output_dir_to_index)
 
     if output_index is not None:
-        allowed = set(int(i) for i in output_index)
+        allowed = {int(i) for i in output_index}
         outputs = [p for p in outputs if output_dir_to_index(p) in allowed]
 
     jsons = []
@@ -84,12 +84,14 @@ def _collect_case_jsons(
         jsons.extend(od.glob(f"*{timeseries_suffix}"))
     return jsons
 
+
 def _as_list_or_none(v) -> list | None:
     if v is None:
         return None
     if isinstance(v, (list, tuple, set)):
         return list(v)
     return [v]
+
 
 def _norm_model_component(v) -> list[str] | None:
     """
@@ -108,6 +110,7 @@ def _norm_model_component(v) -> list[str] | None:
     parts = [p.strip() for p in s.split(",") if p.strip()]
     return parts or None
 
+
 def _norm_pets(v) -> list[int] | None:
     if v is None:
         return None
@@ -117,15 +120,18 @@ def _norm_pets(v) -> list[int] | None:
         return [int(x) for x in v]
     return [int(v)]
 
+
 def _norm_end(v):
     if v is None or v == "":
         return None
     return int(v)
 
+
 def load_post_runs_config(config_path: Path) -> tuple[dict, list[dict]]:
     """
     Parse 'postprocessing.yaml' with:
-      default_settings: { post_base_path, model_component?, pets?, stats_start_index?, stats_end_index?, timeseries_suffix? }
+      default_settings:
+      { post_base_path, model_component?, pets?, stats_start_index?, stats_end_index?, timeseries_suffix? }
       runs: [ { name, output_index?, model_component?, pets?, stats_start_index?, stats_end_index? }, ... ]
     """
     data = read_yaml(config_path)
@@ -145,28 +151,39 @@ def load_post_runs_config(config_path: Path) -> tuple[dict, list[dict]]:
     if not post_base_path:
         raise ValueError("'default_settings.post_base_path' is required.")
 
-    defaults = dict(
-        post_base_path=Path(post_base_path).expanduser().resolve(),
-        model_component=_norm_model_component(dflt.get("model_component")),
-        pets=_norm_pets(dflt.get("pets")),
-        stats_start_index=(int(dflt.get("stats_start_index")) if dflt.get("stats_start_index") is not None else None),
-        stats_end_index=_norm_end(dflt.get("stats_end_index")),
-        timeseries_suffix=dflt.get("timeseries_suffix", "_timeseries.json"),
-        save_json_path=(Path(dflt["save_json_path"]).expanduser() if dflt.get("save_json_path") else None),
-    )
+    defaults = {
+        "post_base_path": Path(post_base_path).expanduser().resolve(),
+        "model_component": _norm_model_component(dflt.get("model_component")),
+        "pets": _norm_pets(dflt.get("pets")),
+        "stats_start_index": (
+            int(dflt.get("stats_start_index")) if dflt.get("stats_start_index") is not None else None
+        ),
+        "stats_end_index": _norm_end(dflt.get("stats_end_index")),
+        "timeseries_suffix": dflt.get("timeseries_suffix", "_timeseries.json"),
+        "save_json_path": (Path(dflt["save_json_path"]).expanduser() if dflt.get("save_json_path") else None),
+    }
 
     norm_runs: list[dict] = []
     for r in runs:
-        norm_runs.append(dict(
-            name=str(r["name"]),
-            output_index=( [int(x) for x in r["output_index"]] if r.get("output_index") is not None else None ),
-            model_component=_norm_model_component(r.get("model_component", defaults["model_component"])),
-            pets=_norm_pets(r.get("pets", defaults["pets"])),
-            stats_start_index=(int(r.get("stats_start_index")) if r.get("stats_start_index") is not None else defaults["stats_start_index"]),
-            stats_end_index=_norm_end(r.get("stats_end_index") if r.get("stats_end_index") is not None else defaults["stats_end_index"]),
-            save_json_path=(Path(r["save_json_path"]).expanduser() if r.get("save_json_path") else None),
-        ))
+        norm_runs.append(
+            {
+                "name": str(r["name"]),
+                "output_index": ([int(x) for x in r["output_index"]] if r.get("output_index") is not None else None),
+                "model_component": _norm_model_component(r.get("model_component", defaults["model_component"])),
+                "pets": _norm_pets(r.get("pets", defaults["pets"])),
+                "stats_start_index": (
+                    int(r.get("stats_start_index"))
+                    if r.get("stats_start_index") is not None
+                    else defaults["stats_start_index"]
+                ),
+                "stats_end_index": _norm_end(
+                    r.get("stats_end_index") if r.get("stats_end_index") is not None else defaults["stats_end_index"]
+                ),
+                "save_json_path": (Path(r["save_json_path"]).expanduser() if r.get("save_json_path") else None),
+            }
+        )
     return defaults, norm_runs
+
 
 def _summarise_case(
     json_paths: list[Path],
@@ -183,8 +200,21 @@ def _summarise_case(
       - each (case, model_component) with __output_name='combine' (per-component combine)
     NOTE: No case-level (component-agnostic) '<case>_combine' rows.
     """
-    output_cols = ["__row_label","__case_name","__output_name","model_component",
-                   "ncpus","hits","tmin","tmax","tavg","tmedian","tstd","pemin","pemax"]
+    output_cols = [
+        "__row_label",
+        "__case_name",
+        "__output_name",
+        "model_component",
+        "ncpus",
+        "hits",
+        "tmin",
+        "tmax",
+        "tavg",
+        "tmedian",
+        "tstd",
+        "pemin",
+        "pemax",
+    ]
 
     if not json_paths:
         return pd.DataFrame(columns=output_cols)
@@ -198,7 +228,7 @@ def _summarise_case(
         sel = {s.strip() for s in model_component}
         ts = ts[ts["model_component"].astype(str).str.strip().isin(sel)]
     if pets is not None:
-        allowed = set(int(p) for p in pets)
+        allowed = {int(p) for p in pets}
         ts = ts[ts["pet"].isin(allowed)]
 
     # slice per (case, output, model_component, PET); slicer should skip empty groups
@@ -207,8 +237,7 @@ def _summarise_case(
     if ts.empty:
         return pd.DataFrame(columns=output_cols)
 
-    grp_out = ts.groupby(["__case_name", "__output_name", "model_component"],
-                         sort=False, dropna=False)
+    grp_out = ts.groupby(["__case_name", "__output_name", "model_component"], sort=False, dropna=False)
     per_output = grp_out.agg(
         hits=("duration_s", "count"),
         tmin=("duration_s", "min"),
@@ -219,14 +248,13 @@ def _summarise_case(
     ).reset_index()
 
     ncpus_per_out = (
-        ts.groupby(["__case_name", "__output_name", "model_component"],
-                   sort=False, dropna=False)
-          .agg(
-              ncpus=("pet", "nunique"),
-              pemin=("pet", "min"),
-              pemax=("pet", "max"),
-          )
-          .reset_index()
+        ts.groupby(["__case_name", "__output_name", "model_component"], sort=False, dropna=False)
+        .agg(
+            ncpus=("pet", "nunique"),
+            pemin=("pet", "min"),
+            pemax=("pet", "max"),
+        )
+        .reset_index()
     )
 
     per_output = per_output.merge(
@@ -239,12 +267,13 @@ def _summarise_case(
     # labels and order
     per_output["__output_index"] = per_output["__output_name"].map(output_name_to_index)
     per_output["__row_label"] = (
-        per_output["__case_name"] + "/" + per_output["__output_name"] + "/" +
-        per_output["model_component"].astype(str).str.strip()
+        per_output["__case_name"]
+        + "/"
+        + per_output["__output_name"]
+        + "/"
+        + per_output["model_component"].astype(str).str.strip()
     )
-    per_output = per_output.sort_values(
-        ["__case_name", "__output_index", "model_component"], kind="mergesort"
-    )
+    per_output = per_output.sort_values(["__case_name", "__output_index", "model_component"], kind="mergesort")
 
     combined_by_comp = (
         per_output.groupby(["__case_name", "model_component"], sort=False, dropna=False)
@@ -263,26 +292,22 @@ def _summarise_case(
     )
     combined_by_comp["__output_name"] = "combine"
     combined_by_comp["__row_label"] = (
-        combined_by_comp["__case_name"] + "/combine/" +
-        combined_by_comp["model_component"].astype(str).str.strip()
+        combined_by_comp["__case_name"] + "/combine/" + combined_by_comp["model_component"].astype(str).str.strip()
     )
 
-    out = pd.concat(
-        [per_output[output_cols], combined_by_comp[output_cols]],
-        ignore_index=True
-    )
+    out = pd.concat([per_output[output_cols], combined_by_comp[output_cols]], ignore_index=True)
     return out
+
 
 def _resolve_save_json_path(save_json_path: str | None) -> Path | None:
     if save_json_path is None:
         return None
     p = Path(save_json_path).expanduser()
     if p.suffix.lower() != ".json":
-        raise ValueError(
-            f"Invalid save_json_path: {p} — must explicitly end with '.json'!"
-        )
+        raise ValueError(f"Invalid save_json_path: {p} — must explicitly end with '.json'!")
     p.parent.mkdir(parents=True, exist_ok=True)
     return p
+
 
 def run_post_summary_from_yaml(ns: argparse.Namespace) -> None:
     """
@@ -321,9 +346,11 @@ def run_post_summary_from_yaml(ns: argparse.Namespace) -> None:
         # Save per-run json if this run specified a save path (strict .json)
         per_run_save = _resolve_save_json_path(r.get("save_json_path"))
         if per_run_save is not None:
-            (case_summary
-                .reset_index(drop=True)  # ensure a clean row index
-                .to_json(per_run_save, orient="records", indent=2))
+            (
+                case_summary.reset_index(drop=True).to_json(  # ensure a clean row index
+                    per_run_save, orient="records", indent=2
+                )
+            )
             print(f"-- saved per-run summary JSON: {per_run_save}")
 
         per_case_tables.append(case_summary)
@@ -349,9 +376,7 @@ def run_post_summary_from_yaml(ns: argparse.Namespace) -> None:
     combined_out = _resolve_save_json_path(cli_combined or default_combined)
 
     if combined_out is not None:
-        (combined_df
-            .rename(columns={"__row_label": "name"})
-            .to_json(combined_out, orient="records", indent=2))
+        (combined_df.rename(columns={"__row_label": "name"}).to_json(combined_out, orient="records", indent=2))
         print("\n")
         print(f"-- saved combined summary json: {combined_out}")
 

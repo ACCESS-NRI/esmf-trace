@@ -2,10 +2,8 @@
 esmf-trace package.
 """
 
-from importlib.metadata import version, PackageNotFoundError
+from contextlib import suppress
+from importlib.metadata import PackageNotFoundError, version
 
-try:
+with suppress(PackageNotFoundError):
     __version__ = version("esmf_trace")
-except PackageNotFoundError:
-    # package is not installed
-    pass

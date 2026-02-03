@@ -5,6 +5,7 @@ from pathlib import Path
 class ConfigError(Exception):
     pass
 
+
 @dataclass(frozen=True)
 class DefaultSettings:
     post_base_path: str | None = None
@@ -19,6 +20,7 @@ class DefaultSettings:
     max_depth: int = 6
     merge_adjacent: bool = False
     merge_gap_ns: int = 1000
+
 
 @dataclass(frozen=True)
 class RunSettings:
@@ -64,27 +66,29 @@ class RunSettings:
         """
         Produce kwargs for the single run
         """
-        return dict(
-            traceout_path=traceout_path,
-            base_prefix=self.base_prefix,
-            post_dir=post_dir,
-            pets=self.pets,
-            model_component=self.normalised_model_component(defaults),
-            merge_adjacent=defaults.merge_adjacent,
-            merge_gap_ns=defaults.merge_gap_ns,
-            max_depth=defaults.max_depth,
-            stream_prefix=defaults.stream_prefix,
-            xaxis_datetime=defaults.xaxis_datetime,
-            separate_plots=defaults.separate_plots,
-            cmap=defaults.cmap,
-            renderer=defaults.renderer,
-            show_html=defaults.show_html,
-        )
+        return {
+            "traceout_path": traceout_path,
+            "base_prefix": self.base_prefix,
+            "post_dir": post_dir,
+            "pets": self.pets,
+            "model_component": self.normalised_model_component(defaults),
+            "merge_adjacent": defaults.merge_adjacent,
+            "merge_gap_ns": defaults.merge_gap_ns,
+            "max_depth": defaults.max_depth,
+            "stream_prefix": defaults.stream_prefix,
+            "xaxis_datetime": defaults.xaxis_datetime,
+            "separate_plots": defaults.separate_plots,
+            "cmap": defaults.cmap,
+            "renderer": defaults.renderer,
+            "show_html": defaults.show_html,
+        }
+
 
 def _require_key(d: dict, keys: list[str]) -> str:
     missing = [k for k in keys if k not in d]
     if missing:
         raise ConfigError(f"missing required config key(s): {', '.join(missing)}")
+
 
 def _parse_defaults(d: dict) -> DefaultSettings:
     return DefaultSettings(
@@ -102,34 +106,37 @@ def _parse_defaults(d: dict) -> DefaultSettings:
         merge_gap_ns=int(d.get("merge_gap_ns", 1000)),
     )
 
+
 def _parse_runs(lst: list[dict]) -> list[RunSettings]:
     runs = []
-    for l in lst:
-        if not isinstance(l, dict):
+    for item in lst:
+        if not isinstance(item, dict):
             raise ConfigError("Each run must be a mapping (dict)")
 
-        has_exact_path = l.get("exact_path")
-        has_other_parts = l.get("run_base") and l.get("run_name") and l.get("branch")
+        has_exact_path = item.get("exact_path")
+        has_other_parts = item.get("run_base") and item.get("run_name") and item.get("branch")
         if not has_exact_path and not has_other_parts:
-            raise ConfigError("Each run must have either 'exact_path' or all of 'run_base', 'run_name', and 'branch' set")
+            raise ConfigError(
+                "Each run must have either 'exact_path' or all of 'run_base', 'run_name', and 'branch' set"
+            )
 
         runs.append(
             RunSettings(
-                base_prefix=l.get("base_prefix"),
-                post_base_path=l.get("post_base_path"),
-                exact_path=Path(l["exact_path"]) if l.get("exact_path") else None,
-                run_base=Path(l["run_base"]) if l.get("run_base") else None,
-                run_name=l.get("run_name"),
-                branch=l.get("branch"),
-                pets=l.get("pets"),
-                model_component=l.get("model_component"),
-                output_index=l.get("output_index"),
+                base_prefix=item.get("base_prefix"),
+                post_base_path=item.get("post_base_path"),
+                exact_path=Path(item["exact_path"]) if item.get("exact_path") else None,
+                run_base=Path(item["run_base"]) if item.get("run_base") else None,
+                run_name=item.get("run_name"),
+                branch=item.get("branch"),
+                pets=item.get("pets"),
+                model_component=item.get("model_component"),
+                output_index=item.get("output_index"),
             )
         )
     return runs
 
-def load_config(input_config: dict) -> (DefaultSettings, list[RunSettings]):
 
+def load_config(input_config: dict) -> (DefaultSettings, list[RunSettings]):
     _require_key(input_config, ["default_settings", "runs"])
 
     if not isinstance(input_config["default_settings"], dict):

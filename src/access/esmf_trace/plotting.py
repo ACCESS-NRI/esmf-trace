@@ -1,22 +1,25 @@
 from pathlib import Path
+
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 import plotly.io as pio
-from plotly.subplots import make_subplots
 from matplotlib import colormaps
+from plotly.subplots import make_subplots
+
 from .common_vars import seconds_to_nanoseconds
+
 
 def plot_flame_graph(
     df: pd.DataFrame,
-    pets: int|list|None = None,
+    pets: int | list | None = None,
     xaxis_datetime: bool = False,
     separate_plots: bool = False,
     cmap_name: str = "tab20",
     renderer: str | None = None,
     show_html: bool = False,
-    html_path: Path | None = None
-    ):
+    html_path: Path | None = None,
+):
     """
     Interactive flame graph for one or more pets.
     """
@@ -36,8 +39,8 @@ def plot_flame_graph(
     components = sorted(df["model_component"].unique())
     cmap = colormaps.get_cmap(cmap_name).resampled(len(components))
     colours = {
-        c: f"rgb({int(r*255)},{int(g*255)},{int(b*255)})"
-        for c, (r, g, b, _) in zip(components, cmap(range(len(components))))
+        c: f"rgb({int(r * 255)},{int(g * 255)},{int(b * 255)})"
+        for c, (r, g, b, _) in zip(components, cmap(range(len(components))), strict=True)
     }
 
     # yaxis categories
@@ -47,24 +50,24 @@ def plot_flame_graph(
 
     if multi_overlay:
         pet_index = {p: i for i, p in enumerate(sorted(pets))}
-        df["y_cat"] = [f"depth{d}_pet_{p}" for d, p in zip(df["depth"], df["pet"])]
+        df["y_cat"] = [f"depth{d}_pet_{p}" for d, p in zip(df["depth"], df["pet"], strict=True)]
         df["__order"] = df["depth"] * len(pets) + df["pet"].map(pet_index)
         cat_order = df.sort_values("__order")["y_cat"].unique().tolist()
         y_col = y_hover_col = "y_cat"
-        yaxis_kwargs = dict(categoryorder="array", categoryarray=cat_order)
+        yaxis_kwargs = {"categoryorder": "array", "categoryarray": cat_order}
     else:
         y_col = y_hover_col = "depth"
-        yaxis_kwargs = dict(autorange="reversed")
+        yaxis_kwargs = {"autorange": "reversed"}
 
     # xaxis columns
     if xaxis_datetime:
         df["x_start"] = pd.to_datetime(df["start"], unit="ns")
         df["x_end"] = pd.to_datetime(df["end"], unit="ns")
-        df["duration_s"] = df["duration_s"] / seconds_to_nanoseconds # seconds
+        df["duration_s"] = df["duration_s"] / seconds_to_nanoseconds  # seconds
     else:
         origin_ns = df["start"].min()
-        df["x_start"] = (df["start"] - origin_ns) / seconds_to_nanoseconds # seconds
-        df["x_end"] = df["x_start"] + df["duration_s"] / seconds_to_nanoseconds # seconds
+        df["x_start"] = (df["start"] - origin_ns) / seconds_to_nanoseconds  # seconds
+        df["x_end"] = df["x_start"] + df["duration_s"] / seconds_to_nanoseconds  # seconds
 
     # plot
     if xaxis_datetime:
@@ -119,7 +122,7 @@ def plot_flame_graph(
                             f"end   = {e:.6f}s<br>"
                             f"dur   = {w:.6f}s"
                             for lbl, s, e, w in zip(
-                                grp[y_hover_col], grp["x_start"], grp["x_end"], grp["width"]
+                                grp[y_hover_col], grp["x_start"], grp["x_end"], grp["width"], strict=True
                             )
                         ],
                         hoverinfo="text",
