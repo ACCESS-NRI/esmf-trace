@@ -1,22 +1,23 @@
-import os
-from pathlib import Path
-from collections import defaultdict
-from contextlib import contextmanager
 import shutil
 import tempfile
-import pandas as pd
+from collections import defaultdict
+from contextlib import contextmanager
+from pathlib import Path
+
 import bt2
-from .bt2_utils import is_event, event_ts_ns, parse_define_region, parse_region_transition
+import pandas as pd
+
+from .bt2_utils import event_ts_ns, is_event, parse_define_region, parse_region_transition
 
 
 def rows_from_bt2_iterator(it: iter, *, pet_whitelist: set[int] | None = None) -> list:
     """
     Take a bt2 message iterator and produce span rows.
     """
-    region_maps = defaultdict(dict) # per-pet region_id -> name
-    global_map = {} # global fallback mapping from region_id -> region_name
+    region_maps = defaultdict(dict)  # per-pet region_id -> name
+    global_map = {}  # global fallback mapping from region_id -> region_name
     active = defaultdict(dict)
-    stacks = defaultdict(list) # per-pet call stack of component names in order with hierarchical
+    stacks = defaultdict(list)  # per-pet call stack of component names in order with hierarchical
     depth = defaultdict(int)
     out = []
 
@@ -25,7 +26,7 @@ def rows_from_bt2_iterator(it: iter, *, pet_whitelist: set[int] | None = None) -
             continue
 
         event = msg.event
-        pet_id = event.stream.id # stream.id is the pet id
+        pet_id = event.stream.id  # stream.id is the pet id
 
         if pet_whitelist is not None and pet_id not in pet_whitelist:
             continue
@@ -47,7 +48,7 @@ def rows_from_bt2_iterator(it: iter, *, pet_whitelist: set[int] | None = None) -
             component = region_maps[pet_id].get(region_id, global_map.get(region_id, f"region_{region_id}"))
             name = f"{component}_{'enter' if name.endswith('enter') else 'exit'}"
         # only keep enter/exit events
-        if not(name.endswith("_enter") or name.endswith("_exit")):
+        if not (name.endswith("_enter") or name.endswith("_exit")):
             continue
 
         component = name.rsplit("_", 1)[0]
@@ -65,7 +66,7 @@ def rows_from_bt2_iterator(it: iter, *, pet_whitelist: set[int] | None = None) -
             depth[pet_id] += 1
         else:
             frame = active[pet_id].pop(component, None)
-            depth[pet_id] = max(0, depth[pet_id]-1)
+            depth[pet_id] = max(0, depth[pet_id] - 1)
             if frame:
                 frame["end"] = ts
                 frame["duration_s"] = ts - frame["start"]
@@ -74,6 +75,7 @@ def rows_from_bt2_iterator(it: iter, *, pet_whitelist: set[int] | None = None) -
             if stacks[pet_id] and stacks[pet_id][-1] == component:
                 stacks[pet_id].pop()
     return out
+
 
 @contextmanager
 def open_selected_streams(traceout_path: Path, stream_paths: iter):
@@ -96,13 +98,14 @@ def open_selected_streams(traceout_path: Path, stream_paths: iter):
     tmpdir = Path(tempfile.mkdtemp(prefix="ctf_stage_")).resolve()
     try:
         # link metadata and the selected streams into the temp bundle
-        os.symlink(meta, tmpdir / "metadata", target_is_directory=False)
+        Path.symlink(meta, tmpdir / "metadata", target_is_directory=False)
         for s in streams:
-            os.symlink(s, tmpdir / s.name, target_is_directory=False)
+            Path.symlink(s, tmpdir / s.name, target_is_directory=False)
 
         yield bt2.TraceCollectionMessageIterator(str(tmpdir))
     finally:
         shutil.rmtree(tmpdir, ignore_errors=True)
+
 
 def _suffix_int_from_stream_path(sp: Path) -> int | None:
     """
@@ -114,14 +117,15 @@ def _suffix_int_from_stream_path(sp: Path) -> int | None:
     except ValueError:
         return None
 
+
 def df_for_selected_streams(
-    traceout_path: Path, 
-    stream_paths: list[Path], 
-    pets: int|list|None = None, 
-    merge_adjacent: bool = False, 
+    traceout_path: Path,
+    stream_paths: list[Path],
+    pets: int | list | None = None,
+    merge_adjacent: bool = False,
     merge_gap_ns: int = 1000,
     max_depth: int | None = None,
-    ) -> pd.DataFrame:
+) -> pd.DataFrame:
     """
     cols = ["model_component", "start", "end", "duration_s", "depth", "pet"]
     """
@@ -137,7 +141,9 @@ def df_for_selected_streams(
     for sp in stream_paths:
         label = _suffix_int_from_stream_path(sp)
         if pet_whitelist is not None and label not in pet_whitelist:
-            raise ValueError(f"stream path {sp} has pet index {label} which is not in the pet whitelist {pet_whitelist}!")
+            raise ValueError(
+                f"stream path {sp} has pet index {label} which is not in the pet whitelist {pet_whitelist}!"
+            )
 
         # parse from the iterator
         with open_selected_streams(traceout_path, [sp]) as it:
@@ -159,7 +165,10 @@ def df_for_selected_streams(
         # keep only rows up to max_depth
         df = df[df["depth"] <= max_depth].reset_index(drop=True)
         if df.empty:
-            raise ValueError(f"-- All events were filtered out by max_depth={max_depth}, try increasing max_depth or removing the filter.")
+            raise ValueError(
+                f"-- All events were filtered out by max_depth={max_depth}, "
+                "try increasing max_depth or removing the filter."
+            )
 
     if not merge_adjacent:
         return df
@@ -171,11 +180,11 @@ def df_for_selected_streams(
 
     for r in df.itertuples(index=False):
         if (
-            current is not None and
-            r.pet == current["pet"] and
-            r.model_component == current["model_component"] and
-            r.depth == current["depth"] and
-            r.start - current["end"] <= merge_gap_ns
+            current is not None
+            and r.pet == current["pet"]
+            and r.model_component == current["model_component"]
+            and r.depth == current["depth"]
+            and r.start - current["end"] <= merge_gap_ns
         ):
             current["end"] = r.end
             current["duration_s"] += r.duration_s

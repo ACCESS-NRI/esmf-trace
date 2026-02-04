@@ -1,8 +1,9 @@
 import argparse
-from pathlib import Path
 from dataclasses import replace
-from .config import load_config, DefaultSettings, RunSettings
+from pathlib import Path
+
 from .batch_runs import run_batch_jobs
+from .config import DefaultSettings, load_config
 from .postprocess import run_post_summary_from_yaml
 from .tmp_yaml_parser import read_yaml
 
@@ -21,7 +22,10 @@ def _override_run_args(ns: argparse.Namespace) -> None:
     arg.add_argument(
         "--model-component",
         type=str,
-        help="Override the model component filter from config (default: '[ESMF]/[ensemble] RunPhase1/[ESM0001] RunPhase1')",
+        help=(
+            "Override the model component filter from config"
+            " (default: '[ESMF]/[ensemble] RunPhase1/[ESM0001] RunPhase1')"
+        ),
     )
     arg.add_argument(
         "--max-depth",
@@ -69,6 +73,7 @@ def _override_run_args(ns: argparse.Namespace) -> None:
         help="Override the maximum number of workers for parallel processing from config (default: number of CPUs)",
     )
 
+
 def _apply_overrides(ns: argparse.Namespace, defaults: DefaultSettings) -> DefaultSettings:
     """
     Apply any command line overrides to the run defaults.
@@ -101,6 +106,7 @@ def _apply_overrides(ns: argparse.Namespace, defaults: DefaultSettings) -> Defau
 
     return replace(defaults, **updates) if updates else defaults
 
+
 def _add_run_from_yaml_subparser(subparsers) -> None:
     """
     run-from-yaml:
@@ -122,6 +128,7 @@ def _add_run_from_yaml_subparser(subparsers) -> None:
     _override_run_args(rs)
 
     rs.set_defaults(func=run_from_yaml_config)
+
 
 def _add_post_summary_from_yaml_subparser(subparsers) -> None:
     """
@@ -146,23 +153,28 @@ def _add_post_summary_from_yaml_subparser(subparsers) -> None:
     arg = ps.add_argument_group("overrides", "Optional overrides to config settings")
 
     # Optional override
-    arg.add_argument("--model-component", nargs="+",
-                    help="Full model_component name(s) to include.")
-    arg.add_argument("--pets", nargs="+", type=int,
-                    help="PET index(es) to include.")
-    arg.add_argument("--stats-start-index", type=int,
-                    help="Slice start (iloc) per series.")
-    arg.add_argument("--stats-end-index", type=int,
-                    help="Slice end (iloc, exclusive) per series. Default: full length.")
-    arg.add_argument("--timeseries-suffix", type=str, default="_timeseries.json",
-                    help="Timeseries filename suffix to match (default: _timeseries.json).")
-    arg.add_argument("--save-json-path", type=Path,
-                    help="Save summary to json format file (otherwise prints to stdout).")
+    arg.add_argument("--model-component", nargs="+", help="Full model_component name(s) to include.")
+    arg.add_argument("--pets", nargs="+", type=int, help="PET index(es) to include.")
+    arg.add_argument("--stats-start-index", type=int, help="Slice start (iloc) per series.")
+    arg.add_argument(
+        "--stats-end-index", type=int, help="Slice end (iloc, exclusive) per series. Default: full length."
+    )
+    arg.add_argument(
+        "--timeseries-suffix",
+        type=str,
+        default="_timeseries.json",
+        help="Timeseries filename suffix to match (default: _timeseries.json).",
+    )
+    arg.add_argument(
+        "--save-json-path", type=Path, help="Save summary to json format file (otherwise prints to stdout)."
+    )
 
     ps.set_defaults(func=run_post_summary_from_yaml)
 
 
-def run_from_yaml_config(ns: argparse.Namespace,) -> None:
+def run_from_yaml_config(
+    ns: argparse.Namespace,
+) -> None:
     """
     Run multiple jobs from a yaml config file with optional command line overrides.
     """
@@ -171,6 +183,7 @@ def run_from_yaml_config(ns: argparse.Namespace,) -> None:
     # overides
     defaults = _apply_overrides(ns, defaults)
     run_batch_jobs(defaults, runs)
+
 
 def main():
     parser = argparse.ArgumentParser(

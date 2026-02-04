@@ -1,4 +1,5 @@
 import pandas as pd
+
 from .common_vars import seconds_to_nanoseconds
 
 
@@ -7,7 +8,7 @@ def timeseries_component(
     model_component: list[str] | None = None,
     pets: int | list[int] | None = None,
     columns: list[str] | None = None,
-    sort_by: list[str] | None = None
+    sort_by: list[str] | None = None,
 ) -> pd.DataFrame:
     """
     Return a tidy timeseries view with duration from nanoseconds to seconds.
@@ -19,7 +20,7 @@ def timeseries_component(
 
     out = df.copy()
 
-    out["duration_s"] = out["duration_s"] / seconds_to_nanoseconds # seconds
+    out["duration_s"] = out["duration_s"] / seconds_to_nanoseconds  # seconds
 
     if model_component is not None:
         out = out[out["model_component"].isin(set(model_component))]

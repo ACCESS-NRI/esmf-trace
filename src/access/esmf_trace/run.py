@@ -1,10 +1,11 @@
-from pathlib import Path
 import argparse
-import pandas as pd
-from .utils import extract_pets, discover_pet_indices, construct_stream_paths
+from pathlib import Path
+
 from .ctf_parser import df_for_selected_streams
-from .timeseries import timeseries_component
 from .plotting import plot_flame_graph
+from .timeseries import timeseries_component
+from .utils import construct_stream_paths, discover_pet_indices, extract_pets
+
 
 def run(ns: argparse.Namespace) -> tuple[int, str]:
     """

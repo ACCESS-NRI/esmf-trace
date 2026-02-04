@@ -8,6 +8,7 @@ A temporary parser for YAML format files.
 
 import io
 import re
+
 import ruamel.yaml
 
 ryaml = ruamel.yaml.YAML()
@@ -32,7 +33,7 @@ def read_yaml(yaml_path: str) -> dict:
     """
     Reads a YAML file and returns a dictionary.
     """
-    with open(yaml_path, "r", encoding="utf-8") as f:
+    with yaml_path.open("r", encoding="utf-8") as f:
         return ryaml.load(f)
 
 
@@ -45,5 +46,5 @@ def write_yaml(data: dict, yaml_path: str) -> None:
     txt = buffer.getvalue()
     # collapse only blank lines between sibling mapping entries (all levels)
     txt = _BLANK_BETWEEN_KEYS.sub(r"\g<i>\g<k>\n", txt)
-    with open(yaml_path, "w", encoding="utf-8") as f:
+    with yaml_path.open("w", encoding="utf-8") as f:
         f.write(txt)

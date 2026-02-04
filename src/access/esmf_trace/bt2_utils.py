@@ -13,6 +13,7 @@ def is_event(msg):
     """
     return isinstance(msg, bt2._EventMessageConst)
 
+
 def event_ts_ns(msg: bt2._MessageConst) -> int | None:
     """
     Timestamp (ns_from_origin) for event messages
@@ -21,6 +22,7 @@ def event_ts_ns(msg: bt2._MessageConst) -> int | None:
         return None
     cs = msg.default_clock_snapshot
     return None if cs is None else cs.ns_from_origin
+
 
 def _payload(event):
     """
@@ -31,6 +33,7 @@ def _payload(event):
         raise KeyError(f"{event} has no payload_field")
     return pf
 
+
 def parse_define_region(event) -> tuple[int, str]:
     """
     Parse a `define_region` event.
@@ -39,6 +42,7 @@ def parse_define_region(event) -> tuple[int, str]:
     region_id = int(pf["id"])
     region_name = str(pf["name"])
     return region_id, region_name
+
 
 def parse_region_transition(event) -> int:
     """
