@@ -1,0 +1,92 @@
+name: CD
+
+on:
+  push:
+    tags:
+      - '**'
+env:
+  ARTIFACT_DIR: dist_artifact
+
+jobs:
+  get-package-name:
+    name: Get package name
+    runs-on: ubuntu-latest
+    outputs:
+      package-name: ${{ steps.get-package-name.outputs.package-name }}
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+        with:
+          fetch-tags: true
+          fetch-depth: 0
+      
+      - name: Get name
+        id: get-package-name
+        run: |
+          echo "package-name=$(yq '.project.name' pyproject.toml)" >> $GITHUB_OUTPUT
+
+  run-ci:
+    name: Run CI
+    uses: ./.github/workflows/ci.yml
+  
+  version-check:
+    name: Version sanity check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Version sanity check
+        uses: access-nri/actions/.github/actions/version-check@main
+        with:
+          versioning-scheme: semver
+
+  publish-python-package:
+    name: Publish Python Package
+    uses: access-nri/actions/.github/workflows/publish-python-package.yml@main
+    needs: [run-ci, version-check]
+    secrets: inherit
+    permissions:
+      actions: write
+
+  create-github-release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    needs: [get-package-name, publish-python-package]
+    permissions:
+      contents: write
+    steps:
+      - name: Download artifact
+        uses: actions/download-artifact@v5
+        with:
+          name: ${{ needs.publish-python-package.outputs.artifact-name }}
+          path: ${{ env.ARTIFACT_DIR }}
+
+      - name: Create Release
+        uses: softprops/action-gh-release@6cbd405e2c4e67a21c47fa9e383d020e4e28b836 #v2.3.3
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: ${{ needs.get-package-name.outputs.package-name }} ${{ github.ref_name }}
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+          files: ${{ env.ARTIFACT_DIR }}/*
+    
+  cleanup-on-failure:
+    name: Cleanup on failure
+    runs-on: ubuntu-latest
+    needs: [publish-python-package, create-github-release]
+    # Run this job if the publish-python-package job doesn't succeed (fails or doesn't run)
+    # This doesn't run if the python gets published successfully but the release creation fails
+    if: ${{ ( always() && needs.publish-python-package.result != 'success' ) }}
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-tags: true
+          fetch-depth: 0 
+      
+      - name: Cleanup tag
+        run: |
+          git push origin ':${{ github.ref }}'
+          echo "A job in the current workflow failed. Tag '${{ github.ref }}' was deleted."
