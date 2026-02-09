@@ -20,7 +20,9 @@ dependencies = [
   "plotly",
   "matplotlib",
   "ruamel.yaml",
-  "pyarrow"
+  "pyarrow",
+  "experiment-generator",
+  "experiment-runner"
 ]
 
 [build-system]
