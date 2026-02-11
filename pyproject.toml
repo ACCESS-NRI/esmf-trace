@@ -38,7 +38,6 @@ Homepage = "https://github.com/ACCESS-NRI/esmf-trace"
 
 [project.optional-dependencies]
 devel = [
-    "ruff",
     "pre-commit",
 ]
 test = [
