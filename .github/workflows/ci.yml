@@ -2,8 +2,14 @@ name: CI
 on:
     push:
         branches: [ "main" ]
+        paths-ignore:
+          - ".github/**"
+          - "documentation/**"
     pull_request:
         branches: [ "main" ]
+        paths-ignore:
+          - ".github/**"
+          - "documentation/**"
     workflow_dispatch:
     workflow_call:
 
