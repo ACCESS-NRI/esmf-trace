@@ -21,8 +21,6 @@ dependencies = [
   "matplotlib",
   "ruamel.yaml",
   "pyarrow",
-  "experiment-generator",
-  "experiment-runner"
 ]
 
 [build-system]
@@ -56,6 +54,11 @@ addopts = [
   "--cov-report=xml"
 ]
 testpaths = ["tests"]
+
+access = [
+  "experiment-generator",
+  "experiment-runner",
+]
 
 [tool.coverage.run]
 
