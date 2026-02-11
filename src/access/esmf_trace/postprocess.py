@@ -275,31 +275,3 @@ def post_summary_from_yaml(
         clean_parquet = combined_out.with_name(combined_out.stem + "_table.parquet")
         clean_df.to_parquet(clean_parquet, index=True)
         print(f"-- saved cleaned table parquet: {clean_parquet}")
-
-
-# def run_post_summary_from_yaml(ns: argparse.Namespace) -> None:
-#     """
-#     cli entrypoint for post-summary config from yaml and run the summary.
-#     """
-#     defaults, runs = load_yaml_config(Path(ns.config), kind="post-summary")
-#     assert isinstance(defaults, PostSummarySettings)
-
-#     # apply overrides to defaults (if any)
-#     overrides = {}
-#     if getattr(ns, "model_component", None) is not None:
-#         overrides["model_component"] = ns.model_component  # list[str]
-#     if getattr(ns, "pets", None) is not None:
-#         overrides["pets"] = ns.pets  # list[int]
-#     if getattr(ns, "stats_start_index", None) is not None:
-#         overrides["stats_start_index"] = ns.stats_start_index  # int
-#     if getattr(ns, "stats_end_index", None) is not None:
-#         overrides["stats_end_index"] = ns.stats_end_index  # int
-#     if getattr(ns, "timeseries_suffix", None) is not None:
-#         overrides["timeseries_suffix"] = ns.timeseries_suffix  # str
-#     if getattr(ns, "save_json_path", None) is not None:
-#         overrides["save_json_path"] = ns.save_json_path  # str
-
-#     if overrides:
-#         defaults = replace(defaults, **overrides)
-
-#     post_summary_from_yaml(defaults, runs, save_json_path=ns.save_json_path)
