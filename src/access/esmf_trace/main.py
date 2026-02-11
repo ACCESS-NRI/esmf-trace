@@ -1,8 +1,8 @@
 import argparse
 from pathlib import Path
 
-from .common_vars import RUN_DEFAULT_FLAG_KEYS, RUN_DEFAULT_KEYS, POST_SUMMARY_DEFAULT_KEYS
-from .library import run_from_config, post_summary_from_config
+from .common_vars import POST_SUMMARY_DEFAULT_KEYS, RUN_DEFAULT_FLAG_KEYS, RUN_DEFAULT_KEYS
+from .library import post_summary_from_config, run_from_config
 
 
 def _add_run_overrides(parser: argparse.ArgumentParser) -> None:

@@ -9,8 +9,8 @@ with suppress(PackageNotFoundError):
     __version__ = version("esmf_trace")
 
 from access.esmf_trace.library import (
-    run_from_config,
     post_summary_from_config,
+    run_from_config,
 )
 
 __all__ = [

@@ -1,9 +1,10 @@
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal, overload
+
+from .common_vars import config_kind
 from .tmp_yaml_parser import read_yaml
 from .utils import extract_index_list_from_str, extract_pets
-from .common_vars import config_kind
 
 
 class ConfigError(Exception):
@@ -205,7 +206,8 @@ def load_yaml_config(config_path: Path, kind: config_kind):
             has_other_parts = item.get("run_base") and item.get("run_name") and item.get("branch")
             if not has_exact_path and not has_other_parts:
                 raise ConfigError(
-                    f"Each run must have either 'exact_path' or all of 'run_base', 'run_name', and 'branch' set (error in runs[{i}])"
+                    "Each run must have either 'exact_path' or "
+                    f"all of 'run_base', 'run_name', and 'branch' set (error in runs[{i}])"
                 )
 
             run_settings.append(

@@ -2,7 +2,7 @@ from dataclasses import replace
 from pathlib import Path
 
 from .batch_runs import run_batch_jobs
-from .config import DefaultSettings, PostSummarySettings, load_yaml_config, RunSettings, PostRunSettings
+from .config import DefaultSettings, PostRunSettings, PostSummarySettings, RunSettings, load_yaml_config
 from .postprocess import post_summary_from_yaml
 
 

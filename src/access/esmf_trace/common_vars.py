@@ -1,6 +1,5 @@
 from typing import Literal
 
-
 seconds_to_nanoseconds = 1e9
 
 # For now, two config kinds: "run" and "post-summary" are included.
