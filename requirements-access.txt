@@ -10,8 +10,6 @@
 git+https://github.com/ACCESS-NRI/access-experiment-generator.git@main
 git+https://github.com/ACCESS-NRI/access-experiment-runner.git@main
 
-# These two repos are required for profiling workflows, but are not
-# yet merged into their respective main branches. We therefore install from
-# the relevant feature branches.
-git+https://github.com/ACCESS-NRI/access-profiling.git@47-om3-profiling_temporary
-git+https://github.com/ACCESS-NRI/access-config-utils.git@32-accessom3-layout
+# Feature branches required for profiling work (not yet merged)
+-e git+https://github.com/ACCESS-NRI/access-profiling.git@47-om3-profiling_temporary#egg=access-profiling
+-e git+https://github.com/ACCESS-NRI/access-config-utils.git@32-accessom3-layout#egg=access-config-utils
