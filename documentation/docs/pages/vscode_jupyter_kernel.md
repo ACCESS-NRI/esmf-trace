@@ -31,12 +31,9 @@ cat > ~/.local/share/jupyter/kernels/esmf-trace-bt2/kernel.json <<'JSON'
   "argv": [
     "bash",
     "-lc",
-    "module use /g/data/vk83/modules && \
-     module load model-tools/babeltrace2/2.1.2 && \
-     source /path/to/venv/bin/activate && \
-     exec python -m ipykernel_launcher -f {connection_file}"
+    "module use /g/data/vk83/modules && module load model-tools/babeltrace2/2.1.2 && source /path/to/venv/bin/activate && exec python -m ipykernel_launcher -f {connection_file}"
   ],
-  "display_name": "Python (esmf-trace+bt2)",
+  "display_name": "Python (esmf-trace + bt2)",
   "language": "python"
 }
 JSON
