@@ -48,7 +48,7 @@ This configuration ensures that the `bt2` module is loaded and the virtual envir
 VS Code needs to reload in order to discover the new kernel. Open the Command Palette and reload the window:
 
 ```
-Cmd + Shift + P → Developer: Reload Window
+Cmd + Shift + P -> Developer: Reload Window
 ```
 Alternatively, you can restart VS Code.
 
