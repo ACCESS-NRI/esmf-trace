@@ -53,8 +53,11 @@ Alternatively, you can restart VS Code.
 
 Open your Jupyter notebook (.ipynb) in VS Code, then:
 
-- Click the kernel picker in the top-right corner.
-- Select Python (`esmf-trace+bt2`).
+- Click the kernel picker in the top-right corner, 
+- Then select `Jupyter Kernel...` under `Select Another Kernel` as shown in below screenshot,
+- Then you will find (`esmf-trace + bt2/bash`).
+
+![alt text](image.png)
 
 ## Step 5: Verify that bt2 is available
 
