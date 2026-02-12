@@ -16,6 +16,8 @@ classifiers = [
 ]
 
 dependencies = [
+  "numpy",
+  "xarray",
   "pandas",
   "plotly",
   "matplotlib",
@@ -40,9 +42,16 @@ Homepage = "https://github.com/ACCESS-NRI/esmf-trace"
 devel = [
     "pre-commit",
 ]
+
 test = [
     "pytest",
     "pytest-cov",
+]
+
+# Not required for the package but useful for users running notebooks
+interactive = [
+    "jupyter",
+    "ipykernel",
 ]
 
 [tool.pytest.ini_options]
@@ -52,12 +61,8 @@ addopts = [
   "--cov-report=html",
   "--cov-report=xml"
 ]
-testpaths = ["tests"]
 
-access = [
-  "experiment-generator",
-  "experiment-runner",
-]
+testpaths = ["tests"]
 
 [tool.coverage.run]
 
