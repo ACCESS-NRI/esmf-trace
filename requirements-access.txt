@@ -1,2 +1,17 @@
+# Workspace environment for ACCESS profiling and scaling workflows.
+#
+# This file installs multiple ACCESS repos into a single virtual
+# environment for convenient imports and interactive development.
+#
+# It is not intended to represent the runtime requirements of any single
+# repo. Instead, it defines a curated workspace environment that
+# allows multiple tools to be used together.
+
+git+https://github.com/ACCESS-NRI/access-experiment-generator.git@main
+git+https://github.com/ACCESS-NRI/access-experiment-runner.git@main
+
+# These two repos are required for profiling workflows, but are not
+# yet merged into their respective main branches. We therefore install from
+# the relevant feature branches.
 git+https://github.com/ACCESS-NRI/access-profiling.git@47-om3-profiling_temporary
 git+https://github.com/ACCESS-NRI/access-config-utils.git@32-accessom3-layout
