@@ -93,8 +93,8 @@ markdown_extensions:
 
 # Navigation
 nav:
-  - Home:                  index.md
-  - vscode jupyter kernel: pages/vscode_jupyter_kernel.md
+  - Home:                  pages/index.md
+  - Instructions in vscode jupyter kernel: pages/vscode_jupyter_kernel.md
 
 # Footer
 extra:
