@@ -64,11 +64,6 @@ addopts = [
 
 testpaths = ["tests"]
 
-access = [
-  "experiment-generator",
-  "experiment-runner",
-]
-
 [tool.coverage.run]
 
 [tool.ruff]
