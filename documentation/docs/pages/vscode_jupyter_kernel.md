@@ -31,12 +31,9 @@ cat > ~/.local/share/jupyter/kernels/esmf-trace-bt2/kernel.json <<'JSON'
   "argv": [
     "bash",
     "-lc",
-    "module use /g/data/vk83/modules && \
-     module load model-tools/babeltrace2/2.1.2 && \
-     source /path/to/venv/bin/activate && \
-     exec python -m ipykernel_launcher -f {connection_file}"
+    "module use /g/data/vk83/modules && module load model-tools/babeltrace2/2.1.2 && source /path/to/venv/bin/activate && exec python -m ipykernel_launcher -f {connection_file}"
   ],
-  "display_name": "Python (esmf-trace+bt2)",
+  "display_name": "Python (esmf-trace + bt2)",
   "language": "python"
 }
 JSON
@@ -56,8 +53,11 @@ Alternatively, you can restart VS Code.
 
 Open your Jupyter notebook (.ipynb) in VS Code, then:
 
-- Click the kernel picker in the top-right corner.
-- Select Python (`esmf-trace+bt2`).
+- Click the kernel picker in the top-right corner, 
+- Then select `Jupyter Kernel...` under `Select Another Kernel` as shown in below screenshot,
+- Then you will find (`esmf-trace + bt2/bash`).
+
+![vscode select_another_kernel](/assets/select_another_kernel.png){: loading="lazy" }
 
 ## Step 5: Verify that bt2 is available
 
