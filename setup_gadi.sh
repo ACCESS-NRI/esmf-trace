@@ -12,7 +12,7 @@ python3 -m venv .venv
 pip install --upgrade pip setuptools wheel
 
 # Install the package in editable mode for development
-pip install -e .
+pip install -e ".[devel]"
 
 # Install the interactive tooling for the notebooks
 pip install -e ".[interactive]"
