@@ -98,9 +98,9 @@ def open_selected_streams(traceout_path: Path, stream_paths: iter):
     tmpdir = Path(tempfile.mkdtemp(prefix="ctf_stage_")).resolve()
     try:
         # link metadata and the selected streams into the temp bundle
-        Path.symlink(meta, tmpdir / "metadata", target_is_directory=False)
+        (tmpdir / "metadata").symlink_to(meta)
         for s in streams:
-            Path.symlink(s, tmpdir / s.name, target_is_directory=False)
+            (tmpdir / s.name).symlink_to(s)
 
         yield bt2.TraceCollectionMessageIterator(str(tmpdir))
     finally:

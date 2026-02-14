@@ -1,18 +1,15 @@
 import argparse
-from dataclasses import replace
 from pathlib import Path
 
-from .batch_runs import run_batch_jobs
-from .config import DefaultSettings, load_config
-from .postprocess import run_post_summary_from_yaml
-from .tmp_yaml_parser import read_yaml
+from .common_vars import POST_SUMMARY_DEFAULT_KEYS, RUN_DEFAULT_FLAG_KEYS, RUN_DEFAULT_KEYS
+from .library import post_summary_from_config, run_from_config
 
 
-def _override_run_args(ns: argparse.Namespace) -> None:
+def _add_run_overrides(parser: argparse.ArgumentParser) -> None:
     """
     Optional overrides from command line args to config settings.
     """
-    arg = ns.add_argument_group("overrides", "Optional overrides to config settings")
+    arg = parser.add_argument_group("overrides", "Optional overrides to config settings")
 
     arg.add_argument(
         "--stream-prefix",
@@ -74,40 +71,56 @@ def _override_run_args(ns: argparse.Namespace) -> None:
     )
 
 
-def _apply_overrides(ns: argparse.Namespace, defaults: DefaultSettings) -> DefaultSettings:
+def _apply_run_overrides(ns: argparse.Namespace) -> dict:
     """
     Apply any command line overrides to the run defaults.
     """
-    updates = {}
+    overrides = {}
 
     # booleans only override when True provided
-    if getattr(ns, "merge_adjacent", False):
-        updates["merge_adjacent"] = True
-    if getattr(ns, "xaxis_datetime", False):
-        updates["xaxis_datetime"] = True
-    if getattr(ns, "separate_plots", False):
-        updates["separate_plots"] = True
-    if getattr(ns, "show_html", False):
-        updates["show_html"] = True
+    for flag in RUN_DEFAULT_FLAG_KEYS:
+        if getattr(ns, flag, False):
+            overrides[flag] = True
 
     # None means no override
-    for f in [
-        "stream_prefix",
-        "model_component",
-        "max_depth",
-        "merge_gap_ns",
-        "cmap",
-        "renderer",
-        "max_workers",
-    ]:
+    for f in RUN_DEFAULT_KEYS:
         v = getattr(ns, f, None)
         if v is not None:
-            updates[f] = v
+            overrides[f] = v
 
-    return replace(defaults, **updates) if updates else defaults
+    return overrides
 
 
-def _add_run_from_yaml_subparser(subparsers) -> None:
+def _add_post_summary_overrides(parser: argparse.ArgumentParser) -> None:
+    """
+    Add optional override arguments for the post-summary-from-yaml command.
+    """
+    arg = parser.add_argument_group("overrides", "Optional overrides to config settings")
+
+    arg.add_argument("--model-component", nargs="+", help="Full model_component name(s) to include.")
+    arg.add_argument("--pets", nargs="+", type=int, help="PET index(es) to include.")
+    arg.add_argument("--stats-start-index", type=int, help="Slice start (iloc) per series.")
+    arg.add_argument("--stats-end-index", type=int, help="Slice end (iloc, exclusive) per series.")
+    arg.add_argument(
+        "--timeseries-suffix", type=str, help="Timeseries filename suffix to match (e.g., _timeseries.json)."
+    )
+    arg.add_argument("--save-json-path", type=Path, help="Save combined summary JSON to this path.")
+
+
+def _apply_post_summary_overrides(ns: argparse.Namespace) -> dict:
+    overrides = {}
+
+    for f in POST_SUMMARY_DEFAULT_KEYS:
+        v = getattr(ns, f, None)
+        if v is not None:
+            if f == "save_json_path" and isinstance(v, Path):
+                v = str(v)
+            overrides[f] = v
+
+    return overrides
+
+
+def _add_run_command(subparsers) -> None:
     """
     run-from-yaml:
       Process multiple traceout directories from a yaml config file
@@ -125,12 +138,12 @@ def _add_run_from_yaml_subparser(subparsers) -> None:
     )
 
     # Optional overrides
-    _override_run_args(rs)
+    _add_run_overrides(rs)
 
-    rs.set_defaults(func=run_from_yaml_config)
+    rs.set_defaults(func=cli_run_from_yaml)
 
 
-def _add_post_summary_from_yaml_subparser(subparsers) -> None:
+def _add_post_summary_command(subparsers) -> None:
     """
     post-summary-from-yaml:
       Summarise existing *_timeseries.json files by reading a YAML file that lists:
@@ -150,52 +163,52 @@ def _add_post_summary_from_yaml_subparser(subparsers) -> None:
         help="yaml config file for postprocessing summary",
     )
 
-    arg = ps.add_argument_group("overrides", "Optional overrides to config settings")
+    # Optional overrides
+    _add_post_summary_overrides(ps)
 
-    # Optional override
-    arg.add_argument("--model-component", nargs="+", help="Full model_component name(s) to include.")
-    arg.add_argument("--pets", nargs="+", type=int, help="PET index(es) to include.")
-    arg.add_argument("--stats-start-index", type=int, help="Slice start (iloc) per series.")
-    arg.add_argument(
-        "--stats-end-index", type=int, help="Slice end (iloc, exclusive) per series. Default: full length."
-    )
-    arg.add_argument(
-        "--timeseries-suffix",
-        type=str,
-        default="_timeseries.json",
-        help="Timeseries filename suffix to match (default: _timeseries.json).",
-    )
-    arg.add_argument(
-        "--save-json-path", type=Path, help="Save summary to json format file (otherwise prints to stdout)."
-    )
-
-    ps.set_defaults(func=run_post_summary_from_yaml)
+    ps.set_defaults(func=cli_post_summary_from_yaml)
 
 
-def run_from_yaml_config(
+def cli_run_from_yaml(
     ns: argparse.Namespace,
 ) -> None:
     """
     Run multiple jobs from a yaml config file with optional command line overrides.
     """
-    input_config = read_yaml(ns.config)
-    defaults, runs = load_config(input_config)
-    # overides
-    defaults = _apply_overrides(ns, defaults)
-    run_batch_jobs(defaults, runs)
+    run_from_config(ns.config, run_overrides=_apply_run_overrides(ns))
 
 
-def main():
+def cli_post_summary_from_yaml(
+    ns: argparse.Namespace,
+) -> None:
+    """
+    Summarise existing e.g. *_timeseries.json files by reading a yaml file that lists:
+      - post_base_path
+      - cases: [{ name: postprocessing_<case>, output_index: [optional list of ints] }, ...]
+    """
+    post_summary_from_config(
+        ns.config,
+        post_overrides=_apply_post_summary_overrides(ns),
+        save_json_path=ns.save_json_path,
+    )
+
+
+def build_parser() -> argparse.ArgumentParser:
+    """
+    Build and return the CLI argument parser.
+    """
     parser = argparse.ArgumentParser(
         prog="esmf-trace",
         description="ESMF traceout analysis and visualisation.",
     )
-
     subparsers = parser.add_subparsers(dest="cmd", required=True)
+    _add_run_command(subparsers)
+    _add_post_summary_command(subparsers)
+    return parser
 
-    _add_run_from_yaml_subparser(subparsers)
-    _add_post_summary_from_yaml_subparser(subparsers)
 
+def main():
+    parser = build_parser()
     args = parser.parse_args()
     args.func(args)
 

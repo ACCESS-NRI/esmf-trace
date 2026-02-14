@@ -6,7 +6,7 @@ import psutil
 
 from .config import ConfigError, DefaultSettings, RunSettings
 from .run import run as single_run
-from .utils import extract_index_list, output_name_to_index
+from .utils import extract_index_list_from_str, output_name_to_index
 
 
 def _find_traceout_dir(output_dir: Path, stream_prefix: str) -> Path | None:
@@ -29,7 +29,7 @@ def _gather_outputs(archive_dir: Path, output_index: str | None) -> list[Path]:
     all_outputs = [p for p in archive_dir.glob("output*") if p.is_dir()]
     all_outputs = [p for p in all_outputs if output_name_to_index(p) is not None]
     output_dirs = sorted(all_outputs, key=output_name_to_index)
-    selected = extract_index_list(output_index)
+    selected = extract_index_list_from_str(output_index)
     if selected is not None:
         sel = set(selected)
         present = {output_name_to_index(p) for p in output_dirs}
