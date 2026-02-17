@@ -19,7 +19,7 @@ def output_dir_to_index(p: Path) -> int | None:
     return output_name_to_index(p.name)
 
 
-def extract_index_list(s: str | None) -> list[int] | None:
+def extract_index_list_from_str(s: str | None) -> list[int] | None:
     """
     Parse '0,2-4,9' -> [0,2,3,4,9]
     """
