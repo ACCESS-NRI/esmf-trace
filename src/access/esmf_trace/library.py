@@ -74,10 +74,10 @@ class ACCESSRunConfigBuilder:
         self,
         branches: list[str],
         post_base_path: str | Path,
-        exact_paths: list[str],
+        exact_paths: list[Path],
         model_component: str,
-        branch_pattern: re.Pattern[str],
-        pets_components: list[str],
+        branch_pattern: re.Pattern[str] | None = None,
+        pets_components: list[str] | None = None,
         pets_prefix: str = "0",
         max_workers: int = 4,
         default_overwrite: dict | None = None,
@@ -94,17 +94,19 @@ class ACCESSRunConfigBuilder:
         max_workers: number of parallel workers to use for postprocessing default 4 for login nodes
         default_overwrite: Extra keys to merge into default_settings (eg {"timeseries_suffix": "_timeseries.json"}).
         """
+        # core run list
         self.branches = branches
-        self.post_base_path = Path(post_base_path)
+        self.exact_paths = [Path(p) for p in exact_paths]
 
+        # defaults
+        self.post_base_path = Path(post_base_path)
         self.model_component = model_component
         self.max_workers = max_workers
 
+        # pet configuration
         self.branch_pattern = branch_pattern
-        self.pets_components = pets_components
+        self.pets_components = list(pets_components) if pets_components is not None else None
         self.pets_prefix = pets_prefix
-
-        self.exact_paths = exact_paths
 
         # default_settings
         self.default_settings = dict(self.DEFAULT_SETTINGS)
@@ -124,19 +126,20 @@ class ACCESSRunConfigBuilder:
         if not isinstance(self.max_workers, int) or self.max_workers < 1:
             raise ValueError("max_workers must be an int >= 1")
 
-        if self.branch_pattern is None:
-            raise ValueError("branch_pattern must be provided with a regex pattern string.")
-
-        if self.pets_components is None:
-            raise ValueError("pets_components must be provided, (e.g. ['shared','ocn'])")
+        if self.pets_components is not None and self.branch_pattern is None:
+            raise ValueError("branch_pattern must be provided if pets_components is provided.")
 
     def _parse_layouts(self) -> list[dict[str, int]]:
         """
-        Parse per branch layout values
+        Parse per branch layout values.
+
+        This is only used if pets_components is provided,
+        otherwise pets will be None and esmf-trace will use all pets in the traceout dir.
 
         It returns one dict per branch, with keys from the named capture groups in the regex pattern and int values.
         e.g.,
-            branch = "..._shared_26_ocn_78" -> {"shared": 26, "ocn": 78}
+            branch_pattern captures: (?P<shared>\\d+), (?P<ocn>\\d+)
+            branch: "..._shared_26_ocn_78" -> {"shared": 26, "ocn": 78}
         """
         # Collect one dict per branch
         layouts: list[dict[str, int]] = []
@@ -154,7 +157,7 @@ class ACCESSRunConfigBuilder:
 
     def _pets_for_layout(self, layout: dict[str, int]) -> str:
         """
-        Build pets string for a branch from the parsed layout values.
+        Build a PET string for a branch from a parsed layout value.
 
         eg with pets_components = ['shared', 'ocn'] and pets_prefix = "0"
         layout = {"shared": 26, "ocn": 78} -> "0,26,78"
@@ -164,9 +167,9 @@ class ACCESSRunConfigBuilder:
         parts.extend(str(layout[comp]) for comp in self.pets_components)
         return ",".join(parts)
 
-    def _pet_list(self) -> list[str]:
+    def _build_pets_list(self) -> list[str]:
         """
-        Return the per-run PET string aligned with `branches`
+        Return PET strings aligned with `branches`
         """
         if self.pets_components is None:
             raise ValueError("pets_components must be provided to build pets strings.")
@@ -190,22 +193,22 @@ class ACCESSRunConfigBuilder:
                     ...
             }
         """
-        paths = self.exact_paths
-
-        # pets are optional; if configured, compute them otherwise leave them out
-        pets = self._pet_list() if self.pets_components is not None else None
+        # pets are optional
+        # If pets_components is None, pets will be None in the config,
+        # and esmf-trace will use all pets in the traceout dir.
+        pets_list = self._build_pets_list() if self.pets_components is not None else None
 
         runs: list[dict] = []
         for i, branch in enumerate(self.branches):
             run_item: dict = {
-                "exact_path": paths[i],
+                "exact_path": self.exact_paths[i],
                 "base_prefix": branch,
             }
-            if pets is not None:
-                run_item["pets"] = pets[i]
+            if pets_list is not None:
+                run_item["pets"] = pets_list[i]
             runs.append(run_item)
 
-        config = {
+        return {
             "default_settings": {
                 "post_base_path": str(self.post_base_path),
                 "model_component": self.model_component,
@@ -213,5 +216,3 @@ class ACCESSRunConfigBuilder:
             },
             "runs": runs,
         }
-
-        return config
