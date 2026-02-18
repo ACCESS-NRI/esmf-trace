@@ -84,7 +84,7 @@ class ACCESSRunConfigBuilder:
     ) -> None:
         """
         Parameters:
-        branches: Experiment branch directory names; Each string must match layout["pattern"]
+        branches: Experiment branch directory names; each string must match the regex provided in branch_pattern
         post_base_path: where esmf-trace writes postprocessed outputs for this config
         exact_paths: list of exact paths for each branch
         model_component: comma-separated esmf component selector string.
