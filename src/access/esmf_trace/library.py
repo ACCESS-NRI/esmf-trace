@@ -201,7 +201,7 @@ class ACCESSRunConfigBuilder:
         runs: list[dict] = []
         for i, branch in enumerate(self.branches):
             run_item: dict = {
-                "exact_path": self.exact_paths[i],
+                "exact_path": str(self.exact_paths[i]),
                 "base_prefix": branch,
             }
             if pets_list is not None:
