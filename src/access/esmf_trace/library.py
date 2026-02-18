@@ -216,3 +216,86 @@ class ACCESSRunConfigBuilder:
             },
             "runs": runs,
         }
+
+
+class ACCESSPostSummaryConfigBuilder:
+    """
+    Build an esmf-trace post-summary config dict for ACCESS-style workflows.
+    """
+
+    def __init__(
+        self,
+        post_base_path: str | Path,
+        model_component: str | list[str] | None = None,
+        pets: str | list | None = None,
+        stats_start_index: int | None = None,
+        stats_end_index: int | None = None,
+        save_json_path: str | Path | None = None,
+        timeseries_suffix: str = "_timeseries.json",
+        default_overwrite: dict | None = None,
+    ) -> None:
+        """
+        Same parameters as ACCESSRunConfigBuilder, but builds a config for post-summary instead of run.
+        """
+        self.post_base_path = Path(post_base_path)
+        self.model_component = model_component
+        self.pets = pets
+        self.stats_start_index = stats_start_index
+        self.stats_end_index = stats_end_index
+        self.timeseries_suffix = timeseries_suffix
+        self.save_json_path = Path(save_json_path) if save_json_path is not None else None
+        self.default_overwrite = default_overwrite if default_overwrite is not None else {}
+
+        self._validate()
+
+    def _validate(self) -> None:
+        if not str(self.post_base_path):
+            raise ValueError("post_base_path must be provided.")
+
+    def build_config(self, runs: list[dict]) -> dict:
+        """
+        Build the post-summary config dict.
+
+        minimum requirement per run:
+            - {"name": "branch_name"}
+        common fields all optional:
+            - pets: "0, 52" or [0, 52]
+            - model_component: list[str] or comma-separated str
+            - output_index: "1,3-5,6" or [1,3,4,5,6]
+            - stats_start_index: int
+            - stats_end_index: int
+            - save_json_path: str or Path, must end with .json
+        """
+        if not isinstance(runs, list) or len(runs) == 0:
+            raise ValueError("At least one run must be provided.")
+
+        default_settings: dict = {
+            "post_base_path": str(self.post_base_path),
+            "timeseries_suffix": self.timeseries_suffix,
+        }
+
+        if self.model_component is not None:
+            default_settings["model_component"] = (
+                self.model_component
+                if isinstance(self.model_component, list)
+                else [s.strip() for s in str(self.model_component).split(",") if s.strip()]
+            )
+        if self.pets is not None:
+            default_settings["pets"] = (
+                self.pets
+                if isinstance(self.pets, list)
+                else [s.strip() for s in str(self.pets).split(",") if s.strip()]
+            )
+        if self.stats_start_index is not None:
+            default_settings["stats_start_index"] = self.stats_start_index
+        if self.stats_end_index is not None:
+            default_settings["stats_end_index"] = self.stats_end_index
+        if self.save_json_path is not None:
+            default_settings["save_json_path"] = str(self.save_json_path)
+
+        default_settings.update(self.default_overwrite)
+
+        return {
+            "default_settings": default_settings,
+            "runs": runs,
+        }
