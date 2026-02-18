@@ -212,7 +212,7 @@ def post_summary_from_yaml(
     runs: list[PostRunSettings],
     save_json_path: str | None = None,
 ) -> pd.DataFrame:
-    post_base_path: Path = defaults.post_base_path
+    post_base_path: Path = Path(defaults.post_base_path)
     timeseries_suffix: str = defaults.timeseries_suffix
 
     per_case_tables: list[pd.DataFrame] = []
