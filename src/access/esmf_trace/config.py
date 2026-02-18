@@ -165,6 +165,8 @@ def _norm_path_or_none(v: str | Path | None) -> Path | None:
 # define overloads for type checking of load_yaml_config
 @overload
 def load_yaml_config(config_path: Path, kind: Literal["run"]) -> (DefaultSettings, list[RunSettings]): ...
+
+
 @overload
 def load_yaml_config(
     config_path: Path, kind: Literal["post-summary"]
