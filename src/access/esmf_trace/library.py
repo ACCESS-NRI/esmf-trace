@@ -90,7 +90,7 @@ class ACCESSRunConfigBuilder:
         model_component: comma-separated esmf component selector string.
         branch_pattern: regex pattern to parse layout values, with capture groups for each layout variable
         pets_components: list[str], keys to include in pets string in order
-        pets_prefix: str | None, prefix for pets string (default "0")
+        pets_prefix: str, prefix for pets string (default "0")
         max_workers: number of parallel workers to use for postprocessing default 4 for login nodes
         default_overwrite: Extra keys to merge into default_settings (eg {"timeseries_suffix": "_timeseries.json"}).
         """
@@ -171,9 +171,6 @@ class ACCESSRunConfigBuilder:
         """
         Return PET strings aligned with `branches`
         """
-        if self.pets_components is None:
-            raise ValueError("pets_components must be provided to build pets strings.")
-
         layouts = self._parse_layouts()
         return [self._pets_for_layout(layout) for layout in layouts]
 
@@ -227,7 +224,7 @@ class ACCESSPostSummaryConfigBuilder:
         self,
         post_base_path: str | Path,
         model_component: str | list[str] | None = None,
-        pets: str | list | None = None,
+        pets: str | list[int] | None = None,
         stats_start_index: int | None = None,
         stats_end_index: int | None = None,
         save_json_path: str | Path | None = None,
@@ -235,7 +232,7 @@ class ACCESSPostSummaryConfigBuilder:
         default_overwrite: dict | None = None,
     ) -> None:
         """
-        Same parameters as ACCESSRunConfigBuilder, but builds a config for post-summary instead of run.
+        Initialise a builder for esmf-trace post-summary configuration for ACCESS-style workflows.
         """
         self.post_base_path = Path(post_base_path)
         self.model_component = model_component
