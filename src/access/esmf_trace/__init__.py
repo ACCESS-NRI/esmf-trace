@@ -9,6 +9,7 @@ with suppress(PackageNotFoundError):
     __version__ = version("esmf_trace")
 
 from access.esmf_trace.library import (
+    ACCESSPostSummaryConfigBuilder,
     ACCESSRunConfigBuilder,
     post_summary_from_config,
     run_from_config,
@@ -18,4 +19,5 @@ __all__ = [
     "run_from_config",
     "post_summary_from_config",
     "ACCESSRunConfigBuilder",
+    "ACCESSPostSummaryConfigBuilder",
 ]
