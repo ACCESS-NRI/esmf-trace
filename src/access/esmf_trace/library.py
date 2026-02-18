@@ -250,7 +250,7 @@ class ACCESSPostSummaryConfigBuilder:
 
     def _validate(self) -> None:
         if not str(self.post_base_path):
-            raise ValueError("post_base_path must be provided.")
+            raise ValueError("post_base_path must be a non-empty path string.")
 
     def build_config(self, runs: list[dict]) -> dict:
         """
