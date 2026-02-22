@@ -89,3 +89,11 @@ def construct_stream_paths(traceout_path: Path, pet_indices: list[int], prefix: 
     """
     traceout_path = Path(traceout_path).expanduser().resolve()
     return [traceout_path / f"{prefix}_{p:04d}" for p in pet_indices]
+
+
+def normalise_str_list(value: str | list[str] | None) -> list[str] | None:
+    if value is None:
+        return None
+    if isinstance(value, list):
+        return [str(v).strip() for v in value if str(v).strip()]
+    return [s.strip() for s in str(value).split(",") if s.strip()]
