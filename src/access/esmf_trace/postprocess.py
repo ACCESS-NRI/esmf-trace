@@ -209,6 +209,8 @@ def post_summary_from_yaml(
     defaults: PostSummarySettings,
     runs: list[PostRunSettings],
     save_json_path: str | None = None,
+    include_combined: bool = True,
+    include_per_output: bool = True,
 ) -> pd.DataFrame:
     post_base_path: Path = Path(defaults.post_base_path)
     timeseries_suffix: str = defaults.timeseries_suffix
@@ -253,6 +255,12 @@ def post_summary_from_yaml(
 
     # Build combined table across all selected runs
     combined_df = pd.concat(per_case_tables, ignore_index=True)
+
+    if not include_combined:
+        combined_df = combined_df[combined_df["__output_name"] != "combine"]
+
+    if not include_per_output:
+        combined_df = combined_df[combined_df["__output_name"] == "combine"]
 
     wanted_cols = ["__row_label", "hits", "tmin", "tmax", "tavg", "tmedian", "tstd", "pemin", "pemax"]
     combined_df = combined_df.loc[:, [c for c in wanted_cols if c in combined_df.columns]]
