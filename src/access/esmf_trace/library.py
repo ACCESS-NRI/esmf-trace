@@ -48,7 +48,21 @@ def post_summary_from_config(
         assert isinstance(defaults, PostSummarySettings)
     else:
         defaults = PostSummarySettings(**config_path["default_settings"])
-        runs = [PostRunSettings(**r) for r in config_path["runs"]]
+
+        merged_runs: list[PostRunSettings] = []
+        for r in config_path["runs"]:
+            rr = dict(r)
+
+            # inherit defaults if not explicitly set per-run
+            rr.setdefault("model_component", defaults.model_component)
+            rr.setdefault("pets", defaults.pets)
+            rr.setdefault("stats_start_index", defaults.stats_start_index)
+            rr.setdefault("stats_end_index", defaults.stats_end_index)
+            # do not inherit default combined save_json_path into per-run save_json_path
+            rr.setdefault("save_json_path", None)
+
+            merged_runs.append(PostRunSettings(**rr))
+        runs = merged_runs
 
     if post_overrides:
         defaults = replace(defaults, **dict(post_overrides))
