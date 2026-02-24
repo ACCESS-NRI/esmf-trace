@@ -42,7 +42,7 @@ def _slice_per_series_iloc(
     """
     Slice rows per (group) using iloc[start:end] in each group after sorting by order_cols
     If both start and end are None -> no slicing (full series).
-    If end is None -> no slicing (full series).
+    If end is None -> slice from start to end of series.
     """
     if start is None and end is None:
         return df
@@ -142,7 +142,7 @@ def _summarise_case(
         tmin=("duration_s", "min"),
         tmax=("duration_s", "max"),
         tavg=("duration_s", "mean"),
-        tmedian=("duration_s", lambda x: x.quantile(0.50)),
+        tmedian=("duration_s", "median"),
         tstd=("duration_s", "std"),
     ).reset_index()
 
@@ -174,21 +174,19 @@ def _summarise_case(
     )
     per_output = per_output.sort_values(["__case_name", "__output_index", "model_component"], kind="mergesort")
 
-    combined_by_comp = (
-        per_output.groupby(["__case_name", "model_component"], sort=False, dropna=False)
-        .agg(
-            hits=("hits", "mean"),
-            tmin=("tmin", "min"),
-            tmax=("tmax", "max"),
-            tavg=("tavg", "mean"),
-            tmedian=("tmedian", "mean"),
-            tstd=("tstd", "mean"),
-            pemin=("pemin", "min"),
-            pemax=("pemax", "max"),
-            ncpus=("ncpus", "mean"),
-        )
-        .reset_index()
-    )
+    grp_comp = ts.groupby(["__case_name", "model_component"], sort=False, dropna=False)
+    combined_by_comp = grp_comp.agg(
+        hits=("duration_s", "count"),
+        tmin=("duration_s", "min"),
+        tmax=("duration_s", "max"),
+        tavg=("duration_s", "mean"),
+        tmedian=("duration_s", "median"),
+        tstd=("duration_s", "std"),
+        ncpus=("pet", "nunique"),
+        pemin=("pet", "min"),
+        pemax=("pet", "max"),
+    ).reset_index()
+
     combined_by_comp["__output_name"] = "combine"
     combined_by_comp["__row_label"] = (
         combined_by_comp["__case_name"] + "/combine/" + combined_by_comp["model_component"].astype(str).str.strip()
@@ -197,7 +195,7 @@ def _summarise_case(
     return pd.concat([per_output[output_cols], combined_by_comp[output_cols]], ignore_index=True)
 
 
-def _resolve_save_json_path(save_json_path: str | None) -> Path | None:
+def _resolve_save_json_path(save_json_path: str | Path | None) -> Path | None:
     if save_json_path is None:
         return None
     p = Path(save_json_path).expanduser()
