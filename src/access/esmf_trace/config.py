@@ -103,7 +103,7 @@ class PostSummarySettings:
 @dataclass(frozen=True)
 class PostRunSettings:
     name: str
-    output_index: list[str] | None = None
+    output_index: list[int] | None = None
     model_component: list[str] | None = None
     pets: list[int] | None = None
     stats_start_index: int | None = None
@@ -266,9 +266,9 @@ def load_yaml_config(config_path: Path, kind: config_kind):
                     output_index=output_index,
                     model_component=_norm_model_component(item.get("model_component", defaults.model_component)),
                     pets=pets,
-                    stats_start_index=_norm_int_or_none(item.get("stats_start_index", default.stats_start_index)),
-                    stats_end_index=_norm_int_or_none(item.get("stats_end_index", default.stats_end_index)),
-                    save_json_path=_norm_path_or_none(item.get("save_json_path", default.save_json_path)),
+                    stats_start_index=_norm_int_or_none(item.get("stats_start_index", defaults.stats_start_index)),
+                    stats_end_index=_norm_int_or_none(item.get("stats_end_index", defaults.stats_end_index)),
+                    save_json_path=_norm_path_or_none(item.get("save_json_path", defaults.save_json_path)),
                 )
             )
         return defaults, post_runs
