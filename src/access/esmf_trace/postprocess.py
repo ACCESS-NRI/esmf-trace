@@ -239,7 +239,7 @@ def post_summary_from_yaml(
             continue
 
         # Save per-run json if this run specified a save path (strict .json)
-        per_run_save = _resolve_save_json_path(r.save_json_path)
+        per_run_save = _resolve_save_json_path(r.save_json_path) if r.save_json_path is not None else None
         if per_run_save is not None:
             (
                 case_summary.reset_index(drop=True).to_json(  # ensure a clean row index
