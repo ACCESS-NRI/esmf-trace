@@ -16,8 +16,7 @@ classifiers = [
 ]
 
 dependencies = [
-  "numpy",
-  "xarray",
+  "psutil",
   "pandas",
   "plotly",
   "matplotlib",
@@ -56,7 +55,7 @@ interactive = [
 
 [tool.pytest.ini_options]
 addopts = [
-  "--cov=esmf_trace",
+  "--cov=access.esmf_trace",
   "--cov-report=term",
   "--cov-report=html",
   "--cov-report=xml"
@@ -71,6 +70,3 @@ line-length = 120
 
 [tool.ruff.lint]
 select = ["E", "F", "B", "C4", "SIM", "PTH", "UP", "I", "N"]
-
-[tool.wheel]
-universal = true
