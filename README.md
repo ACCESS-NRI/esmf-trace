@@ -25,7 +25,33 @@ env:
 
 timing data for every ESMF component invoked during a coupled model run is recorded.
 
-## Dependencies
-The tool currently depends on:
- - [babeltrace2](https://babeltrace.org/) for reading and writing CTF (Common Trace Format) traces.
- - [plotly](https://github.com/plotly/plotly.py) for generating interactive plots.
+## Installation and dependencies
+
+**esmf-trace** requires Python 3.10 or newer. Its Python package dependencies are declared in [`pyproject.toml`](https://github.com/ACCESS-NRI/esmf-trace/blob/main/pyproject.toml) and are installed automatically by `pip`,
+
+```bash
+python3 -m pip install .
+```
+
+### [Babeltrace 2](https://github.com/efficios/babeltrace)
+
+Reading CTF (Common Trace Format) traces also requires the Babeltrace 2 Python bindings, which are imported as `bt2`. Babeltrace 2 is an external dependency rather than a PyPI dependency, so it is intentionally not listed in `pyproject.toml`.
+
+On Gadi, load the ACCESS-NRI module before using **esmf-trace**:
+
+```bash
+module use /g/data/vk83/modules
+module load model-tools/babeltrace2/2.1.2
+```
+
+For a development and notebook environment on Gadi, the repository setup script ([setup_gadi.sh](https://github.com/ACCESS-NRI/esmf-trace/blob/main/setup_gadi.sh)) loads this module, creates `.venv`, and install the development interactive and ACCESS workspace dependencies:
+
+```bash
+./setup_gadi.sh
+```
+
+One can verify that the bindings are available with,
+
+```bash
+python3 -c "import bt2"
+```
