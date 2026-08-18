@@ -44,7 +44,7 @@ module use /g/data/vk83/modules
 module load model-tools/babeltrace2/2.1.2
 ```
 
-For a development and notebook environment on Gadi, the repository setup script ([setup_gadi.sh](https://github.com/ACCESS-NRI/esmf-trace/blob/main/setup_gadi.sh)) loads this module, creates `.venv`, and install the development interactive and ACCESS workspace dependencies:
+To set up a development and notebook environment on Gadi, run the repository setup script ([setup_gadi.sh](https://github.com/ACCESS-NRI/esmf-trace/blob/main/setup_gadi.sh)). The script loads the required modules, creates a `.venv` virtual environment, and installs the development, interactive and ACCESS workspace dependencies:
 
 ```bash
 ./setup_gadi.sh
