@@ -9,13 +9,13 @@ module load model-tools/babeltrace2/2.1.2
 python3 -m venv .venv
 . .venv/bin/activate
 
-pip install --upgrade pip setuptools wheel
+python3 -m pip install --upgrade pip setuptools wheel
 
-# Install the package in editable mode for development
-pip install -e ".[devel]"
-
-# Install the interactive tooling for the notebooks
-pip install -e ".[interactive]"
+# Install the package and development/notebook tooling
+python3 -m pip install -e ".[devel, interactive]"
 
 # Workspace bundle: install other ACCESS repos into the same venv for workflow convenience
-pip install -r requirements-access.txt
+python3 -m pip install -r requirements-access.txt
+
+# Fail if the module's Python bindings are not visible in the virtual environment
+python3 -c "import bt2"
