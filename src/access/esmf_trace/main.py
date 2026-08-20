@@ -105,6 +105,18 @@ def _add_post_summary_overrides(parser: argparse.ArgumentParser) -> None:
         "--timeseries-suffix", type=str, help="Timeseries filename suffix to match (e.g., _timeseries.json)."
     )
     arg.add_argument("--save-json-path", type=Path, help="Save combined summary JSON to this path.")
+    arg.add_argument(
+        "--include-combined",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help="Include rows pooled across selected outputs (default: true).",
+    )
+    arg.add_argument(
+        "--include-per-output",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help="Include one row per selected output (default: true).",
+    )
 
 
 def _apply_post_summary_overrides(ns: argparse.Namespace) -> dict:

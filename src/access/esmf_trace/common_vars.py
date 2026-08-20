@@ -31,4 +31,6 @@ POST_SUMMARY_DEFAULT_KEYS = [
     "stats_end_index",
     "pets",
     "model_component",
+    "include_combined",
+    "include_per_output",
 ]

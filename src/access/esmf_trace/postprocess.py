@@ -47,12 +47,18 @@ def _slice_per_series_iloc(
     if start is None and end is None:
         return df
 
+    if df.empty:
+        return df.copy()
+
     sl = slice(start, end)
     groups = []
 
     for _, g in df.groupby(group_cols, sort=False):
         g_sorted = g.sort_values(order_cols, kind="mergesort")
         groups.append(g_sorted.iloc[sl])
+
+    if not groups:
+        return df.iloc[0:0].copy()
 
     return pd.concat(groups, ignore_index=True)
 
@@ -205,17 +211,38 @@ def _resolve_save_json_path(save_json_path: str | Path | None) -> Path | None:
     return p
 
 
+def _select_summary_rows(
+    summary: pd.DataFrame,
+    *,
+    include_combined: bool,
+    include_per_output: bool,
+) -> pd.DataFrame:
+    if not include_combined and not include_per_output:
+        raise ValueError("At least one of include_combined or include_per_output must be true")
+
+    selected = []
+    if include_per_output:
+        selected.append(summary[summary["__output_name"] != "combine"])
+    if include_combined:
+        selected.append(summary[summary["__output_name"] == "combine"])
+    return pd.concat(selected, ignore_index=True)
+
+
 def post_summary_from_yaml(
     defaults: PostSummarySettings,
     runs: list[PostRunSettings],
-    save_json_path: str | None = None,
-    include_combined: bool = True,
-    include_per_output: bool = True,
+    save_json_path: str | Path | None = None,
+    include_combined: bool | None = None,
+    include_per_output: bool | None = None,
 ) -> pd.DataFrame:
     post_base_path: Path = Path(defaults.post_base_path)
     timeseries_suffix: str = defaults.timeseries_suffix
 
     per_case_tables: list[pd.DataFrame] = []
+    include_combined = defaults.include_combined if include_combined is None else include_combined
+    include_per_output = defaults.include_per_output if include_per_output is None else include_per_output
+    if not include_combined and not include_per_output:
+        raise ValueError("At least one of include_combined or include_per_output must be true")
 
     for r in runs:
         case_name = r.name
@@ -238,29 +265,29 @@ def post_summary_from_yaml(
         if case_summary.empty:
             continue
 
+        selected_case_summary = _select_summary_rows(
+            case_summary,
+            include_combined=include_combined,
+            include_per_output=include_per_output,
+        )
+
         # Save per-run json if this run specified a save path (strict .json)
         per_run_save = _resolve_save_json_path(r.save_json_path) if r.save_json_path is not None else None
         if per_run_save is not None:
             (
-                case_summary.reset_index(drop=True).to_json(  # ensure a clean row index
+                selected_case_summary.reset_index(drop=True).to_json(  # ensure a clean row index
                     per_run_save, orient="records", indent=2
                 )
             )
             print(f"-- saved per-run summary JSON: {per_run_save}")
 
-        per_case_tables.append(case_summary)
+        per_case_tables.append(selected_case_summary)
 
     if not per_case_tables:
-        raise SystemExit("No rows produced. Check YAML selections and filters.")
+        raise ValueError("No rows produced. Check config selections and filters.")
 
     # Build combined table across all selected runs
     combined_df = pd.concat(per_case_tables, ignore_index=True)
-
-    if not include_combined:
-        combined_df = combined_df[combined_df["__output_name"] != "combine"]
-
-    if not include_per_output:
-        combined_df = combined_df[combined_df["__output_name"] == "combine"]
 
     wanted_cols = ["__row_label", "hits", "tmin", "tmax", "tavg", "tmedian", "tstd", "pemin", "pemax"]
     combined_df = combined_df.loc[:, [c for c in wanted_cols if c in combined_df.columns]]
@@ -281,3 +308,5 @@ def post_summary_from_yaml(
         clean_parquet = combined_out.with_name(combined_out.stem + "_table.parquet")
         clean_df.to_parquet(clean_parquet, index=True)
         print(f"-- saved cleaned table parquet: {clean_parquet}")
+
+    return clean_df

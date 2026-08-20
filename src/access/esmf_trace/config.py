@@ -98,6 +98,8 @@ class PostSummarySettings:
     stats_end_index: int | None = None
     timeseries_suffix: str = "_timeseries.json"
     save_json_path: Path | None = None
+    include_combined: bool = True
+    include_per_output: bool = True
 
 
 @dataclass(frozen=True)
@@ -162,6 +164,96 @@ def _norm_path_or_none(v: str | Path | None) -> Path | None:
     return Path(v).expanduser()
 
 
+def _norm_pets(v: int | str | list[int] | tuple[int, ...] | set[int] | None) -> list[int] | None:
+    if v is None:
+        return None
+    if isinstance(v, int):
+        return [v]
+    if isinstance(v, (list, tuple, set)):
+        return sorted({int(pet) for pet in v})
+    return extract_pets(v)
+
+
+def parse_post_summary_config(
+    data: dict,
+    default_overrides: dict | None = None,
+) -> tuple[PostSummarySettings, list[PostRunSettings]]:
+    """
+    Validate and normalise a post-summary config from YAML or a dict.
+    """
+    _require_keys(data, ["default_settings", "runs"], where="config")
+    configured_default = dict(_as_mapping(data["default_settings"], what="default_settings"))
+    runs = _as_list(data["runs"], what="runs")
+    overrides = dict(default_overrides or {})
+    configured_default.update(overrides)
+
+    post_base = configured_default.get("post_base_path")
+    if not post_base:
+        raise ConfigError("default_settings.post_base_path is required for post-summary config")
+
+    defaults = PostSummarySettings(
+        post_base_path=Path(post_base).expanduser(),
+        model_component=_norm_model_component(configured_default.get("model_component")),
+        pets=_norm_pets(configured_default.get("pets")),
+        stats_start_index=_norm_int_or_none(configured_default.get("stats_start_index")),
+        stats_end_index=_norm_int_or_none(configured_default.get("stats_end_index")),
+        timeseries_suffix=configured_default.get("timeseries_suffix", "_timeseries.json"),
+        save_json_path=_norm_path_or_none(configured_default.get("save_json_path")),
+        include_combined=bool(configured_default.get("include_combined", True)),
+        include_per_output=bool(configured_default.get("include_per_output", True)),
+    )
+    if not defaults.include_combined and not defaults.include_per_output:
+        raise ConfigError("at least one of include_combined or include_per_output must be true")
+
+    def selected(item: dict, key: str, default_value):
+        # An explicit library/CLI override applies to every run. Otherwise a
+        # per-run value takes precedence over the configured default.
+        if key in overrides:
+            return overrides[key]
+        return item.get(key, default_value)
+
+    post_runs: list[PostRunSettings] = []
+    for i, raw_item in enumerate(runs):
+        item = _as_mapping(raw_item, what=f"runs[{i}]")
+        _require_keys(item, ["name"], where=f"runs[{i}]")
+
+        oi = item.get("output_index")
+        if isinstance(oi, list):
+            output_index = [int(x) for x in oi]
+        elif isinstance(oi, str):
+            output_index = extract_index_list_from_str(oi)
+        else:
+            output_index = None
+
+        pets_input = selected(item, "pets", defaults.pets)
+        pets = _norm_pets(pets_input)
+
+        post_runs.append(
+            PostRunSettings(
+                name=str(item["name"]),
+                output_index=output_index,
+                model_component=_norm_model_component(selected(item, "model_component", defaults.model_component)),
+                pets=pets,
+                stats_start_index=_norm_int_or_none(selected(item, "stats_start_index", defaults.stats_start_index)),
+                stats_end_index=_norm_int_or_none(selected(item, "stats_end_index", defaults.stats_end_index)),
+                # The default save path is for the combined table. Per-run
+                # output is opt-in and must be declared on that run.
+                save_json_path=_norm_path_or_none(item.get("save_json_path")),
+            )
+        )
+
+    return defaults, post_runs
+
+
+def load_post_summary_config(
+    config: str | Path | dict,
+    default_overrides: dict | None = None,
+) -> tuple[PostSummarySettings, list[PostRunSettings]]:
+    """Load a post-summary config from a YAML path or equivalent mapping."""
+    data = read_yaml(Path(config)) if isinstance(config, (str, Path)) else config
+    return parse_post_summary_config(data, default_overrides=default_overrides)
+
+
 # define overloads for type checking of load_yaml_config
 @overload
 def load_yaml_config(config_path: Path, kind: Literal["run"]) -> (DefaultSettings, list[RunSettings]): ...
@@ -179,6 +271,9 @@ def load_yaml_config(config_path: Path, kind: config_kind):
     """
     config_path = Path(config_path)
     data = read_yaml(config_path)
+
+    if kind == "post-summary":
+        return parse_post_summary_config(data)
 
     _require_keys(data, ["default_settings", "runs"], where=str(config_path))
     default = _as_mapping(data["default_settings"], what="default_settings")
@@ -228,49 +323,5 @@ def load_yaml_config(config_path: Path, kind: config_kind):
             )
 
         return defaults, run_settings
-
-    if kind == "post-summary":
-        post_base = default.get("post_base_path")
-        if not post_base:
-            raise ConfigError("default_settings.post_base_path is required for post-summary config")
-
-        defaults = PostSummarySettings(
-            post_base_path=Path(post_base).expanduser(),
-            model_component=_norm_model_component(default.get("model_component")),
-            pets=extract_pets(default.get("pets") if default.get("pets") is not None else None),
-            stats_start_index=_norm_int_or_none(default.get("stats_start_index")),
-            stats_end_index=_norm_int_or_none(default.get("stats_end_index")),
-            timeseries_suffix=default.get("timeseries_suffix", "_timeseries.json"),
-            save_json_path=_norm_path_or_none(default.get("save_json_path")),
-        )
-
-        post_runs: list[PostRunSettings] = []
-        for i, item in enumerate(runs):
-            item = _as_mapping(item, what=f"runs[{i}]")
-            _require_keys(item, ["name"], where=f"runs[{i}]")
-
-            oi = item.get("output_index")
-            if isinstance(oi, list):
-                output_index = [int(x) for x in oi]
-            elif isinstance(oi, str):
-                output_index = extract_index_list_from_str(oi)
-            else:
-                output_index = None
-
-            pets_input = item.get("pets", defaults.pets)
-            pets = pets_input if isinstance(pets_input, list) or pets_input is None else extract_pets(str(pets_input))
-
-            post_runs.append(
-                PostRunSettings(
-                    name=str(item["name"]),
-                    output_index=output_index,
-                    model_component=_norm_model_component(item.get("model_component", defaults.model_component)),
-                    pets=pets,
-                    stats_start_index=_norm_int_or_none(item.get("stats_start_index", defaults.stats_start_index)),
-                    stats_end_index=_norm_int_or_none(item.get("stats_end_index", defaults.stats_end_index)),
-                    save_json_path=_norm_path_or_none(item.get("save_json_path", defaults.save_json_path)),
-                )
-            )
-        return defaults, post_runs
 
     raise ValueError(f"Invalid config kind: {kind}")

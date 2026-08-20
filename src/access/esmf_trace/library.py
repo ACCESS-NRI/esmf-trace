@@ -3,7 +3,7 @@ from dataclasses import replace
 from pathlib import Path
 
 from .batch_runs import run_batch_jobs
-from .config import DefaultSettings, PostRunSettings, PostSummarySettings, RunSettings, load_yaml_config
+from .config import DefaultSettings, RunSettings, load_post_summary_config, load_yaml_config
 from .postprocess import post_summary_from_yaml
 from .utils import normalise_str_list
 
@@ -43,32 +43,8 @@ def post_summary_from_config(
     e.g. {"timeseries_suffix": "_timeseries.json", "stats_start_index": 1}
     """
 
-    if isinstance(config_path, (str, Path)):
-        defaults, runs = load_yaml_config(Path(config_path), kind="post-summary")
-        assert isinstance(defaults, PostSummarySettings)
-    else:
-        defaults = PostSummarySettings(**config_path["default_settings"])
-
-        merged_runs: list[PostRunSettings] = []
-        for r in config_path["runs"]:
-            rr = dict(r)
-
-            # inherit defaults if not explicitly set per-run
-            rr.setdefault("model_component", defaults.model_component)
-            rr.setdefault("pets", defaults.pets)
-            rr.setdefault("stats_start_index", defaults.stats_start_index)
-            rr.setdefault("stats_end_index", defaults.stats_end_index)
-            # do not inherit default combined save_json_path into per-run save_json_path
-            rr.setdefault("save_json_path", None)
-
-            merged_runs.append(PostRunSettings(**rr))
-        runs = merged_runs
-
-    if post_overrides:
-        defaults = replace(defaults, **dict(post_overrides))
-
-    out_path = str(save_json_path) if save_json_path is not None else None
-    post_summary_from_yaml(defaults, runs, save_json_path=out_path)
+    defaults, runs = load_post_summary_config(config_path, default_overrides=post_overrides)
+    return post_summary_from_yaml(defaults, runs, save_json_path=save_json_path)
 
 
 class ACCESSRunConfigBuilder:
@@ -244,6 +220,8 @@ class ACCESSPostSummaryConfigBuilder:
         stats_end_index: int | None = None,
         save_json_path: str | Path | None = None,
         timeseries_suffix: str = "_timeseries.json",
+        include_combined: bool = True,
+        include_per_output: bool = True,
         default_overwrite: dict | None = None,
     ) -> None:
         """
@@ -256,6 +234,8 @@ class ACCESSPostSummaryConfigBuilder:
         self.stats_end_index = stats_end_index
         self.timeseries_suffix = timeseries_suffix
         self.save_json_path = Path(save_json_path) if save_json_path is not None else None
+        self.include_combined = include_combined
+        self.include_per_output = include_per_output
         self.default_overwrite = default_overwrite if default_overwrite is not None else {}
 
         self._validate()
@@ -263,6 +243,8 @@ class ACCESSPostSummaryConfigBuilder:
     def _validate(self) -> None:
         if not str(self.post_base_path):
             raise ValueError("post_base_path must be a non-empty path string.")
+        if not self.include_combined and not self.include_per_output:
+            raise ValueError("At least one of include_combined or include_per_output must be true.")
 
     def build_config(self, runs: list[dict]) -> dict:
         """
@@ -284,6 +266,8 @@ class ACCESSPostSummaryConfigBuilder:
         default_settings: dict = {
             "post_base_path": str(self.post_base_path),
             "timeseries_suffix": self.timeseries_suffix,
+            "include_combined": self.include_combined,
+            "include_per_output": self.include_per_output,
         }
 
         default_settings["model_component"] = normalise_str_list(self.model_component)
