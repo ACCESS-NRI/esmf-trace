@@ -4,10 +4,9 @@ from collections import defaultdict
 from contextlib import contextmanager
 from pathlib import Path
 
-import bt2
 import pandas as pd
 
-from .bt2_utils import event_ts_ns, is_event, parse_define_region, parse_region_transition
+from .bt2_utils import _import_bt2, event_ts_ns, is_event, parse_define_region, parse_region_transition
 
 
 def rows_from_bt2_iterator(it: iter, *, pet_whitelist: set[int] | None = None) -> list:
@@ -84,6 +83,7 @@ def open_selected_streams(traceout_path: Path, stream_paths: iter):
       - the original 'metadata'
       - the selected stream files (symlinked by basename)
     """
+    bt2 = _import_bt2()
     traceout_path = Path(traceout_path).expanduser().resolve()
     meta = traceout_path / "metadata"
     if not meta.is_file():
