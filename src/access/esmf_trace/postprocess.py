@@ -40,9 +40,21 @@ def _slice_per_series_iloc(
     end: int | None,
 ) -> pd.DataFrame:
     """
-    Slice rows per (group) using iloc[start:end] in each group after sorting by order_cols
-    If both start and end are None -> no slicing (full series).
-    If end is None -> slice from start to end of series.
+    Slice rows per group using iloc[start:end], after sorting each group by
+    order_cols. Used to trim a fixed number of samples off each per-(case,
+    output, component, pet) timeseries before computing stats (e.g. to skip
+    spin-up).
+
+    group_cols: columns identifying one independent series (rows sharing the
+        same values across all of these are sorted and sliced together).
+    order_cols: columns to sort each group by before slicing (e.g. "start").
+    start, end: iloc slice bounds, same semantics as Python's slice(start,
+        end) - e.g. start=1 keeps from the 2nd row onward, end=1 keeps only
+        the 1st row. If both are None, the frame is returned unchanged
+        (no slicing, no copy).
+
+    Returns an empty frame (not an error) if df is empty, or if every group
+    ends up empty after slicing.
     """
     if start is None and end is None:
         return df
@@ -98,12 +110,29 @@ def _summarise_case(
     stats_end_index: int | None,
 ) -> pd.DataFrame:
     """
-    Summarise multiple output directories belonging to a single case.
+    Load, filter and summarise the timeseries JSONs for a single case.
+
+    json_paths: *_timeseries.json files to load and pool (as produced by
+        _collect_case_jsons for one case).
+    model_component: keep only these component selector strings; None keeps
+        all.
+    pets: keep only these PET indices; None keeps all.
+    stats_start_index, stats_end_index: per-series iloc slice applied (via
+        _slice_per_series_iloc) before aggregating, so stats reflect only
+        the selected sample range.
 
     Returns rows for:
-      - each (case, outputNNN, model_component),
-      - each (case, model_component) with __output_name='combine' (per-component combine)
+      - each (case, outputNNN, model_component): stats over that output's
+        own samples only.
+      - each (case, model_component) with __output_name='combine': stats
+        computed directly from the raw samples pooled across every selected
+        output and PET for that component (not by averaging the per-output
+        stats above - hits/ncpus/tstd in particular are not meaningfully
+        combinable that way).
     NOTE: No case-level (component-agnostic) '<case>_combine' rows.
+
+    Returns an empty frame with the expected columns if json_paths is empty
+    or every row is filtered out.
     """
     output_cols = [
         "__row_label",
@@ -202,6 +231,14 @@ def _summarise_case(
 
 
 def _resolve_save_json_path(save_json_path: str | Path | None) -> Path | None:
+    """
+    Validate a save path and ensure its parent directory exists.
+
+    Returns None unchanged if save_json_path is None (meaning "don't save").
+    Otherwise expands the path, requires a ".json" suffix (raising
+    ValueError if it doesn't have one), creates the parent directory if
+    needed, and returns the resolved Path.
+    """
     if save_json_path is None:
         return None
     p = Path(save_json_path).expanduser()
@@ -217,6 +254,18 @@ def _select_summary_rows(
     include_combined: bool,
     include_per_output: bool,
 ) -> pd.DataFrame:
+    """
+    Filter a _summarise_case() result down to the requested row kinds.
+
+    summary: a frame with an "__output_name" column, where the pooled
+        per-component row is labelled "combine" and all other values are
+        per-output rows.
+    include_per_output: keep rows where __output_name != "combine".
+    include_combined: keep rows where __output_name == "combine".
+
+    Raises ValueError if both flags are false, since that would select
+    nothing.
+    """
     if not include_combined and not include_per_output:
         raise ValueError("At least one of include_combined or include_per_output must be true")
 
@@ -235,6 +284,33 @@ def post_summary_from_yaml(
     include_combined: bool | None = None,
     include_per_output: bool | None = None,
 ) -> pd.DataFrame:
+    """
+    Summarise *_timeseries.json files for every run and build a combined
+    table across all of them. This is the shared implementation behind both
+    the `post-summary-from-yaml` CLI command and post_summary_from_config().
+
+    defaults, runs: as produced by config.parse_post_summary_config() /
+        config.load_post_summary_config().
+    save_json_path: if given, overrides defaults.save_json_path as the
+        destination for the combined summary. Writing it also writes a
+        sibling "<stem>_table.parquet" of the cleaned, indexed table.
+    include_combined, include_per_output: override defaults.include_combined
+        / defaults.include_per_output for this call; None keeps the
+        default's value. At least one must end up true.
+
+    For each run: collects its timeseries JSONs, summarises them, filters to
+    the requested row kinds, optionally writes that run's own selection to
+    its `save_json_path`, then folds it into the combined table. Prints the
+    combined table before returning it.
+
+    Raises ValueError if both include flags resolve to false, or if no run
+    produced any rows (e.g. every case directory was missing or every row
+    was filtered out) - not SystemExit, so this is safe to call as a library
+    function as well as from the CLI.
+
+    Returns the combined table as a DataFrame indexed by row label ("name"),
+    with columns hits/tmin/tmax/tavg/tmedian/tstd/pemin/pemax.
+    """
     post_base_path: Path = Path(defaults.post_base_path)
     timeseries_suffix: str = defaults.timeseries_suffix
 

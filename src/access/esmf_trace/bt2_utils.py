@@ -7,6 +7,15 @@ if TYPE_CHECKING:
 
 
 def _import_bt2():
+    """
+    Import and return the bt2 module, deferred to call time rather than
+    module load time. bt2 (Babeltrace2) is a native binding that isn't
+    pip-installable, so importing it eagerly at module scope would make the
+    rest of the package - which has nothing to do with CTF parsing -
+    unimportable wherever bt2 isn't present (e.g. in most test environments).
+
+    Raises RuntimeError with setup instructions if bt2 can't be imported.
+    """
     try:
         import bt2
     except Exception as e:

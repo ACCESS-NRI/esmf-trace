@@ -120,6 +120,16 @@ def _add_post_summary_overrides(parser: argparse.ArgumentParser) -> None:
 
 
 def _apply_post_summary_overrides(ns: argparse.Namespace) -> dict:
+    """
+    Collect the post-summary override dict from parsed CLI args.
+
+    Only includes a key for each field in POST_SUMMARY_DEFAULT_KEYS (which
+    now includes include_combined/include_per_output) that the user actually
+    set - the BooleanOptionalAction flags default to None (unset) so a
+    caller can tell "not passed" apart from an explicit False. Passed
+    straight to parse_post_summary_config()'s default_overrides, which apply
+    to every run.
+    """
     overrides = {}
 
     for f in POST_SUMMARY_DEFAULT_KEYS:

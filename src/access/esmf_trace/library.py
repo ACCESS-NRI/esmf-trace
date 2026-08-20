@@ -37,10 +37,19 @@ def post_summary_from_config(
     save_json_path: str | Path | None = None,
 ):
     """
-    Either a yaml path or a dict with the same structure.
+    Load a post-summary config and build the combined summary table from it.
 
-    post_overrides: optional dict of PostSummarySettings field overrides
-    e.g. {"timeseries_suffix": "_timeseries.json", "stats_start_index": 1}
+    config_path: either a yaml path or a dict with the same structure.
+    post_overrides: optional dict of PostSummarySettings field overrides,
+        applied to every run (not just where a run itself left the field
+        unset) - e.g. {"timeseries_suffix": "_timeseries.json",
+        "stats_start_index": 1}. Can also include "include_combined" and/or
+        "include_per_output" to override those flags.
+    save_json_path: where to write the combined summary JSON (and a sibling
+        parquet table); overrides the config's own save_json_path if given.
+
+    Returns the combined summary as a DataFrame (see
+    postprocess.post_summary_from_yaml).
     """
 
     defaults, runs = load_post_summary_config(config_path, default_overrides=post_overrides)
@@ -226,6 +235,22 @@ class ACCESSPostSummaryConfigBuilder:
     ) -> None:
         """
         Initialise a builder for esmf-trace post-summary configuration for ACCESS-style workflows.
+
+        post_base_path: root directory containing one subdirectory per case name.
+        model_component, pets, stats_start_index, stats_end_index, save_json_path,
+            timeseries_suffix: become the corresponding default_settings entries
+            in the built config (see build_config()); each is applied to every
+            run unless a run dict overrides it directly (save_json_path is the
+            exception - it is never inherited per-run, see PostRunSettings).
+        include_combined: include the pooled-across-outputs "combine" row.
+        include_per_output: include one row per output. At least one of
+            include_combined/include_per_output must be true.
+        default_overwrite: extra key/value pairs merged into default_settings
+            last, so they take precedence over every field above (e.g.
+            {"timeseries_suffix": "_custom.json"}).
+
+        Raises ValueError if post_base_path is empty, or if both
+        include_combined and include_per_output are false.
         """
         self.post_base_path = Path(post_base_path)
         self.model_component = model_component
@@ -241,6 +266,7 @@ class ACCESSPostSummaryConfigBuilder:
         self._validate()
 
     def _validate(self) -> None:
+        """Raise ValueError if post_base_path is empty, or both include flags are false."""
         if not str(self.post_base_path):
             raise ValueError("post_base_path must be a non-empty path string.")
         if not self.include_combined and not self.include_per_output:
@@ -259,6 +285,12 @@ class ACCESSPostSummaryConfigBuilder:
             - stats_start_index: int
             - stats_end_index: int
             - save_json_path: str or Path, must end with .json
+
+        The default_settings block always carries include_combined and
+        include_per_output (from the constructor args), in addition to
+        post_base_path and timeseries_suffix.
+
+        Raises ValueError if `runs` is empty.
         """
         if not isinstance(runs, list) or len(runs) == 0:
             raise ValueError("At least one run must be provided.")

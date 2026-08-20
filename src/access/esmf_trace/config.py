@@ -91,6 +91,28 @@ class RunSettings:
 
 @dataclass(frozen=True)
 class PostSummarySettings:
+    """
+    Config-wide defaults for a post-summary run, produced by
+    parse_post_summary_config() from `default_settings` (plus any CLI/library
+    overrides). Individual PostRunSettings fall back to these values when a
+    run doesn't set its own.
+
+    post_base_path: root directory containing one subdirectory per case name.
+    model_component: full component selector strings to keep; None keeps all.
+    pets: PET indices to keep; None keeps all.
+    stats_start_index, stats_end_index: iloc[start:end] slice applied per
+        (case, output, component, pet) series before aggregating; None on
+        both means no slicing.
+    timeseries_suffix: filename suffix used to find timeseries JSON files
+        under each output directory (e.g. "_timeseries.json").
+    save_json_path: where to write the combined summary across all runs;
+        None means don't save.
+    include_combined: include the pooled-across-outputs "combine" row per
+        (case, component).
+    include_per_output: include one row per (case, output, component).
+        At least one of include_combined/include_per_output must be true.
+    """
+
     post_base_path: Path
     model_component: list[str] | None = None
     pets: list[int] | None = None
@@ -104,6 +126,19 @@ class PostSummarySettings:
 
 @dataclass(frozen=True)
 class PostRunSettings:
+    """
+    Settings for a single case/run within a post-summary config. Any field
+    left unset (None) falls back to the corresponding PostSummarySettings
+    default, except save_json_path, which is opt-in per run and never
+    inherits the shared default (that default is reserved for the combined
+    table across all runs).
+
+    name: case name; must match a subdirectory under post_base_path.
+    output_index: which outputNNN directories to include; None means all.
+    save_json_path: if set, write this run's own summary rows to this path
+        (in addition to it contributing to the combined table).
+    """
+
     name: str
     output_index: list[int] | None = None
     model_component: list[str] | None = None
@@ -165,6 +200,13 @@ def _norm_path_or_none(v: str | Path | None) -> Path | None:
 
 
 def _norm_pets(v: int | str | list[int] | tuple[int, ...] | set[int] | None) -> list[int] | None:
+    """
+    Normalise a pets value to a sorted list of unique ints, or None (all pets).
+
+    Accepts a single int, a list/tuple/set of ints, or a range string like
+    "0,3-5" (delegated to extract_pets). e.g. 3 -> [3]; [3, 1, 1] -> [1, 3];
+    "0,3-5" -> [0, 3, 4, 5].
+    """
     if v is None:
         return None
     if isinstance(v, int):
@@ -179,7 +221,18 @@ def parse_post_summary_config(
     default_overrides: dict | None = None,
 ) -> tuple[PostSummarySettings, list[PostRunSettings]]:
     """
-    Validate and normalise a post-summary config from YAML or a dict.
+    Validate and normalise a post-summary config (already-loaded dict, e.g.
+    from YAML) into a (PostSummarySettings, list[PostRunSettings]) pair.
+
+    data: must contain "default_settings" (mapping) and "runs" (list of
+        mappings, each requiring at least a "name").
+    default_overrides: field values (e.g. from the CLI or a library caller)
+        that take precedence over both the configured defaults and any
+        per-run value for that same field - for every run, not just where
+        the run itself left the field unset.
+
+    Raises ConfigError if required keys are missing, post_base_path isn't
+    set, or both include_combined and include_per_output are false.
     """
     _require_keys(data, ["default_settings", "runs"], where="config")
     configured_default = dict(_as_mapping(data["default_settings"], what="default_settings"))
@@ -249,7 +302,14 @@ def load_post_summary_config(
     config: str | Path | dict,
     default_overrides: dict | None = None,
 ) -> tuple[PostSummarySettings, list[PostRunSettings]]:
-    """Load a post-summary config from a YAML path or equivalent mapping."""
+    """
+    Load a post-summary config from a YAML file path or an equivalent dict,
+    then validate and normalise it via parse_post_summary_config().
+
+    config: path to a YAML file, or a dict with the same
+        {"default_settings": ..., "runs": [...]} structure.
+    default_overrides: see parse_post_summary_config().
+    """
     data = read_yaml(Path(config)) if isinstance(config, (str, Path)) else config
     return parse_post_summary_config(data, default_overrides=default_overrides)
 
