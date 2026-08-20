@@ -111,7 +111,7 @@ class ACCESSRunConfigBuilder:
         if not self.branches:
             raise ValueError("At least one branch must be provided.")
 
-        if normalise_str_list(self.model_component) is None:
+        if not normalise_str_list(self.model_component):
             raise ValueError("model_component must be a non-empty string or list[str].")
 
         if not isinstance(self.max_workers, int) or self.max_workers < 1:
