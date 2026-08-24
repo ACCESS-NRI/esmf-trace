@@ -44,14 +44,23 @@ module use /g/data/vk83/modules
 module load model-tools/babeltrace2/2.1.2
 ```
 
-To set up a development and notebook environment on Gadi, run the repository setup script ([setup_gadi.sh](https://github.com/ACCESS-NRI/esmf-trace/blob/main/setup_gadi.sh)). The script loads the required modules, creates a `.venv` virtual environment, and installs the development, interactive and ACCESS workspace dependencies:
+### Gadi development environment
+To set up a development and notebook environment on Gadi, run the repository setup script ([setup_gadi.sh](https://github.com/ACCESS-NRI/esmf-trace/blob/main/setup_gadi.sh)).
 
 ```bash
 ./setup_gadi.sh
 ```
 
-One can verify that the bindings are available with,
+The setup script:
+  - loads the required Babeltrace 2 module,
+  - creates a Python virtual environment (`.venv`),
+  - installs `esmf-trace` with development and interactive dependencies,
+  - installs additional ACCESS workspace dependencies.
+
+After setup, the environment needs to be activated in each new Gadi session:
 
 ```bash
-python3 -c "import bt2"
+source activate_gadi.sh
 ```
+
+The activation script loads the required Babeltrace 2 module and activates the Python virtual environment.

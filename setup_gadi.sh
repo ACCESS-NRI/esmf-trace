@@ -2,6 +2,10 @@
 set -euo pipefail
 
 # Gadi setup for esmf-trace
+# This script performs the initial installation only.
+# For future sessions, run:
+# source activate_gadi.sh
+
 module use /g/data/vk83/modules
 module load model-tools/babeltrace2/2.1.2
 
@@ -19,3 +23,7 @@ python3 -m pip install -r requirements-access.txt
 
 # Fail if the module's Python bindings are not visible in the virtual environment
 python3 -c "import bt2"
+
+echo "==============================="
+echo "Installation complete. To activate the environment, run:"
+echo "source activate_gadi.sh"
