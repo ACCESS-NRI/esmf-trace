@@ -1,8 +1,16 @@
-# Using bt2 in VS Code Jupyter Notebooks on Gadi
+# Using `bt2` in Jupyter Notebooks on Gadi
 
-This guide describes how to create a custom Jupyter kernel for VS Code on Gadi that supports the Babeltrace2 Python bindings (`bt2`). 
+This guide describes how to configure a Jupyter kernel that supports the Babeltrace2 Python bindings (`bt2`).
 
-This approach runs notebooks on a login node, which is **not recommended** for routine use. It is intended only as a temporary workaround until the cpu target issue affecting Babeltrace2 in ARE Jupyter environments is resolved, see [model-tools#20](https://github.com/ACCESS-NRI/model-tools/pull/20#issue-3915759209). Once that issue is addressed, users should be able to use `bt2` directly through ARE Jupyter without this workaround.
+For routine workflows, users should run Jupyter notebooks in an appropriate compute environment (e.g. [ARE Jupyter](https://are.nci.org.au/)) rather than on Gadi login nodes. Login nodes are shared resources and should only be used for lightweight interactive tasks, such as development, debugging, and quick exploration.
+
+
+
+## Using `bt2` in VS Code Jupyter Notebooks on Gadi (**NOT Recommended**)
+
+> Note: This setup was originally introduced as a workaround for an issue affecting Babeltrace2 in ARE Jupyter environments. See [model-tools#20](https://github.com/ACCESS-NRI/model-tools/pull/20#issue-3915759209).
+
+The following setup provides a way to use `bt2` in VS Code Jupyter notebooks running on a Gadi login node. This approach is intended only for cases where running on a login node is necessary and should not be used for computationally intensive workloads.
 
 This custom kernel ensures that:
 
