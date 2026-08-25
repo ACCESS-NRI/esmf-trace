@@ -66,6 +66,84 @@ class TestParsePostSummaryConfigValidation:
             parse_post_summary_config(data)
 
 
+class TestUnknownKeyRejection:
+    """
+    A mistyped key used to be silently dropped, leaving the setting at its
+    default with no indication anything was wrong.
+    """
+
+    def test_typo_in_default_settings_raises(self):
+        data = _base_post_summary_data()
+        data["default_settings"]["inclde_combined"] = False  # typo
+        with pytest.raises(ConfigError, match="inclde_combined"):
+            parse_post_summary_config(data)
+
+    def test_typo_in_default_overrides_raises(self):
+        with pytest.raises(ConfigError, match="include_combine"):
+            parse_post_summary_config(
+                _base_post_summary_data(),
+                default_overrides={"include_combine": False},  # missing trailing 'd'
+            )
+
+    def test_typo_in_run_entry_raises(self):
+        data = _base_post_summary_data()
+        data["runs"] = [{"name": "case_a", "stats_start_idx": 2}]
+        with pytest.raises(ConfigError, match="stats_start_idx"):
+            parse_post_summary_config(data)
+
+    def test_error_message_lists_valid_keys(self):
+        data = _base_post_summary_data()
+        data["default_settings"]["bogus"] = 1
+        with pytest.raises(ConfigError, match="valid keys:.*include_combined"):
+            parse_post_summary_config(data)
+
+    @pytest.mark.parametrize("key", ["stream_prefix", "cmap", "max_depth", "renderer"])
+    def test_run_config_keys_are_rejected_not_silently_ignored(self, key):
+        # these mean something in a run config but nothing here; accepting
+        # them would imply they have an effect.
+        data = _base_post_summary_data(**{key: "whatever"})
+        with pytest.raises(ConfigError, match=key):
+            parse_post_summary_config(data)
+
+    def test_run_config_keys_are_rejected_in_overrides(self):
+        with pytest.raises(ConfigError, match="stream_prefix"):
+            parse_post_summary_config(
+                _base_post_summary_data(),
+                default_overrides={"stream_prefix": "esmf_stream"},
+            )
+
+    def test_valid_config_parses_silently(self, capsys):
+        parse_post_summary_config(_base_post_summary_data(pets="0,1", include_combined=False))
+        assert capsys.readouterr().out == ""
+
+    def test_every_post_summary_field_is_accepted(self, tmp_path):
+        # guards against the known-key set drifting from the dataclass
+        data = _base_post_summary_data(
+            model_component="a",
+            pets="0,1",
+            stats_start_index=1,
+            stats_end_index=5,
+            timeseries_suffix="_ts.json",
+            save_json_path=str(tmp_path / "out.json"),
+            include_combined=True,
+            include_per_output=True,
+        )
+        data["runs"] = [
+            {
+                "name": "case_a",
+                "output_index": "0-2",
+                "model_component": "a",
+                "pets": [0],
+                "stats_start_index": 1,
+                "stats_end_index": 5,
+                "save_json_path": str(tmp_path / "run.json"),
+            }
+        ]
+        defaults, runs = parse_post_summary_config(data)
+        assert defaults.timeseries_suffix == "_ts.json"
+        assert runs[0].output_index == [0, 1, 2]
+
+
 class TestParsePostSummaryConfigDefaults:
     def test_defaults_fall_back_to_true_when_unset(self):
         defaults, _ = parse_post_summary_config(_base_post_summary_data())
