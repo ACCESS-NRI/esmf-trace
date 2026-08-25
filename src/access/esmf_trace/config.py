@@ -256,7 +256,7 @@ def parse_post_summary_config(
         include_per_output=bool(configured_default.get("include_per_output", True)),
     )
     if not defaults.include_combined and not defaults.include_per_output:
-        raise ConfigError("at least one of include_combined or include_per_output must be true")
+        raise ConfigError("At least one of include_combined or include_per_output must be true")
 
     def selected(item: dict, key: str, default_value):
         # An explicit library/CLI override applies to every run. Otherwise a
