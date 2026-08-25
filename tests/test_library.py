@@ -3,6 +3,7 @@ import re
 
 import pytest
 
+from access.esmf_trace.config import ConfigError
 from access.esmf_trace.library import (
     ACCESSPostSummaryConfigBuilder,
     ACCESSRunConfigBuilder,
@@ -136,3 +137,72 @@ class TestPostSummaryFromConfigWiring:
         save_path = tmp_path / "combined.json"
         post_summary_from_config(config, save_json_path=save_path)
         assert save_path.is_file()
+
+
+class TestPostSummaryFromConfigIncludeFlags:
+    """
+    include_combined/include_per_output are first-class parameters, so a
+    caller can pick which slice of the summary they want without going
+    through the stringly-typed post_overrides dict.
+    """
+
+    def _config(self, tmp_path, **default_settings):
+        _write_output(tmp_path, "case_a", 0, [_row("A", 0, 1.0), _row("A", 0, 3.0)])
+        _write_output(tmp_path, "case_a", 1, [_row("A", 1, 5.0), _row("A", 1, 7.0)])
+        settings = {"post_base_path": str(tmp_path)}
+        settings.update(default_settings)
+        return {"default_settings": settings, "runs": [{"name": "case_a"}]}
+
+    def test_default_returns_both_row_kinds(self, tmp_path):
+        out = post_summary_from_config(self._config(tmp_path))
+        assert any("/combine/" in n for n in out.index)
+        assert any("/output00" in n for n in out.index)
+
+    def test_combined_only(self, tmp_path):
+        out = post_summary_from_config(self._config(tmp_path), include_per_output=False)
+        assert all("/combine/" in n for n in out.index)
+        assert len(out) == 1
+
+    def test_per_output_only(self, tmp_path):
+        out = post_summary_from_config(self._config(tmp_path), include_combined=False)
+        assert not any("/combine/" in n for n in out.index)
+        assert len(out) == 2
+
+    def test_parameter_takes_precedence_over_post_overrides(self, tmp_path):
+        out = post_summary_from_config(
+            self._config(tmp_path),
+            post_overrides={"include_per_output": True},
+            include_per_output=False,
+        )
+        assert all("/combine/" in n for n in out.index)
+
+    def test_parameter_takes_precedence_over_config_default_settings(self, tmp_path):
+        out = post_summary_from_config(
+            self._config(tmp_path, include_per_output=False),
+            include_per_output=True,
+            include_combined=False,
+        )
+        assert not any("/combine/" in n for n in out.index)
+
+    def test_none_leaves_config_value_untouched(self, tmp_path):
+        out = post_summary_from_config(
+            self._config(tmp_path, include_per_output=False),
+            include_per_output=None,
+        )
+        assert all("/combine/" in n for n in out.index)
+
+    def test_both_false_raises(self, tmp_path):
+        with pytest.raises(ValueError, match="include_combined"):
+            post_summary_from_config(
+                self._config(tmp_path),
+                include_combined=False,
+                include_per_output=False,
+            )
+
+    def test_post_overrides_still_works_as_a_channel(self, tmp_path):
+        out = post_summary_from_config(self._config(tmp_path), post_overrides={"include_per_output": False})
+        assert all("/combine/" in n for n in out.index)
+
+    def test_typo_in_post_overrides_is_rejected_not_ignored(self, tmp_path):
+        with pytest.raises(ConfigError, match="include_combine"):
+            post_summary_from_config(self._config(tmp_path), post_overrides={"include_combine": False})
