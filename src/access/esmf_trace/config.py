@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 from pathlib import Path
 from typing import Literal, overload
 
@@ -166,6 +166,25 @@ def _require_keys(d: dict, keys: list[str], where: str) -> None:
         raise ConfigError(f"missing required config key(s) in {where}: {', '.join(missing)}")
 
 
+def _field_names(cls) -> set[str]:
+    """
+    Field names of a settings dataclass, i.e. the keys it accepts.
+    """
+    return {f.name for f in fields(cls)}
+
+
+def _reject_unknown_keys(provided: dict, known: set[str], where: str) -> None:
+    """
+    Raise ConfigError for keys that aren't recognised, so typos fail loudly
+    instead of being silently dropped.
+    """
+    unknown = set(provided) - known
+    if unknown:
+        raise ConfigError(
+            f"unknown config key(s) in {where}: {', '.join(sorted(unknown))} (valid keys: {', '.join(sorted(known))})"
+        )
+
+
 def _norm_model_component(v: str | list | tuple | set | None) -> list[str] | None:
     """
     Normalise model_component to a list of strings.
@@ -231,13 +250,19 @@ def parse_post_summary_config(
         per-run value for that same field - for every run, not just where
         the run itself left the field unset.
 
-    Raises ConfigError if required keys are missing, post_base_path isn't
-    set, or both include_combined and include_per_output are false.
+    Raises ConfigError if required keys are missing, any unrecognised key is
+    supplied (in default_settings, a run entry, or default_overrides),
+    post_base_path isn't set, or both include_combined and include_per_output
+    are false.
     """
     _require_keys(data, ["default_settings", "runs"], where="config")
     configured_default = dict(_as_mapping(data["default_settings"], what="default_settings"))
     runs = _as_list(data["runs"], what="runs")
     overrides = dict(default_overrides or {})
+
+    _reject_unknown_keys(configured_default, _field_names(PostSummarySettings), "default_settings")
+    _reject_unknown_keys(overrides, _field_names(PostSummarySettings), "default_overrides")
+
     configured_default.update(overrides)
 
     post_base = configured_default.get("post_base_path")
@@ -269,6 +294,7 @@ def parse_post_summary_config(
     for i, raw_item in enumerate(runs):
         item = _as_mapping(raw_item, what=f"runs[{i}]")
         _require_keys(item, ["name"], where=f"runs[{i}]")
+        _reject_unknown_keys(item, _field_names(PostRunSettings), f"runs[{i}]")
 
         oi = item.get("output_index")
         if isinstance(oi, list):
