@@ -309,7 +309,7 @@ def post_summary_from_yaml(
     function as well as from the CLI.
 
     Returns the combined table as a DataFrame indexed by row label ("name"),
-    with columns hits/tmin/tmax/tavg/tmedian/tstd/pemin/pemax.
+    with columns ncpus/hits/tmin/tmax/tavg/tmedian/tstd/pemin/pemax.
     """
     post_base_path: Path = Path(defaults.post_base_path)
     timeseries_suffix: str = defaults.timeseries_suffix
@@ -365,7 +365,10 @@ def post_summary_from_yaml(
     # Build combined table across all selected runs
     combined_df = pd.concat(per_case_tables, ignore_index=True)
 
-    wanted_cols = ["__row_label", "hits", "tmin", "tmax", "tavg", "tmedian", "tstd", "pemin", "pemax"]
+    # ncpus is the distinct-PET count behind each row, so it belongs in the
+    # combined output too - without it a pooled 'combine' row can't be told
+    # apart from a single-output row. Ordered as in _summarise_case.
+    wanted_cols = ["__row_label", "ncpus", "hits", "tmin", "tmax", "tavg", "tmedian", "tstd", "pemin", "pemax"]
     combined_df = combined_df.loc[:, [c for c in wanted_cols if c in combined_df.columns]]
 
     clean_df = combined_df.rename(columns={"__row_label": "name"}).set_index("name")
