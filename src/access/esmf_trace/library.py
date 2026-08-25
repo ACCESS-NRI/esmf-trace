@@ -35,6 +35,8 @@ def post_summary_from_config(
     config_path: str | Path | dict,
     post_overrides: dict | None = None,
     save_json_path: str | Path | None = None,
+    include_combined: bool | None = None,
+    include_per_output: bool | None = None,
 ):
     """
     Load a post-summary config and build the combined summary table from it.
@@ -43,17 +45,24 @@ def post_summary_from_config(
     post_overrides: optional dict of PostSummarySettings field overrides,
         applied to every run (not just where a run itself left the field
         unset) - e.g. {"timeseries_suffix": "_timeseries.json",
-        "stats_start_index": 1}. Can also include "include_combined" and/or
-        "include_per_output" to override those flags.
+        "stats_start_index": 1}. Unrecognised keys raise ConfigError.
     save_json_path: where to write the combined summary JSON (and a sibling
         parquet table); overrides the config's own save_json_path if given.
+    include_combined: include the rows pooled across selected outputs.
+    include_per_output: include one row per selected output.
 
     Returns the combined summary as a DataFrame (see
     postprocess.post_summary_from_yaml).
     """
 
     defaults, runs = load_post_summary_config(config_path, default_overrides=post_overrides)
-    return post_summary_from_yaml(defaults, runs, save_json_path=save_json_path)
+    return post_summary_from_yaml(
+        defaults,
+        runs,
+        save_json_path=save_json_path,
+        include_combined=include_combined,
+        include_per_output=include_per_output,
+    )
 
 
 class ACCESSRunConfigBuilder:
