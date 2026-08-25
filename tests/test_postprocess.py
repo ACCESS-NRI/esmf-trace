@@ -244,6 +244,50 @@ class TestPostSummaryFromYaml:
         assert out.index.name == "name"
         assert "tavg" in out.columns
 
+    def test_combined_table_column_order(self, tmp_path):
+        _write_case_output(tmp_path, "case_a", 0, [_row("A", 0, 1.0)])
+        defaults, runs = self._settings(tmp_path)
+        out = post_summary_from_yaml(defaults, runs)
+        assert list(out.columns) == [
+            "ncpus",
+            "hits",
+            "tmin",
+            "tmax",
+            "tavg",
+            "tmedian",
+            "tstd",
+            "pemin",
+            "pemax",
+        ]
+
+    def test_ncpus_reaches_the_combined_table(self, tmp_path):
+        # the pooled 'combine' row spans two PETs; without ncpus in the
+        # combined output that distinct-PET count is invisible.
+        _write_case_output(tmp_path, "case_a", 0, [_row("A", 0, 1.0), _row("A", 0, 3.0)])
+        _write_case_output(tmp_path, "case_a", 1, [_row("A", 1, 5.0), _row("A", 1, 7.0)])
+        defaults, runs = self._settings(tmp_path)
+        out = post_summary_from_yaml(defaults, runs)
+        assert "ncpus" in out.columns
+        assert out.loc["case_a/combine/A", "ncpus"] == 2
+        assert out.loc["case_a/output000/A", "ncpus"] == 1
+        assert out.loc["case_a/output001/A", "ncpus"] == 1
+
+    def test_ncpus_reaches_the_combined_json_and_parquet(self, tmp_path):
+        _write_case_output(tmp_path, "case_a", 0, [_row("A", 0, 1.0)])
+        _write_case_output(tmp_path, "case_a", 1, [_row("A", 1, 5.0)])
+        defaults, runs = self._settings(tmp_path)
+        save_path = tmp_path / "out" / "combined.json"
+        post_summary_from_yaml(defaults, runs, save_json_path=save_path)
+
+        saved = json.loads(save_path.read_text())
+        assert all("ncpus" in row for row in saved)
+        combine_row = next(r for r in saved if "/combine/" in r["name"])
+        assert combine_row["ncpus"] == 2
+
+        parquet = pd.read_parquet(tmp_path / "out" / "combined_table.parquet")
+        assert "ncpus" in parquet.columns
+        assert parquet.loc["case_a/combine/A", "ncpus"] == 2
+
     def test_include_per_output_false_keeps_only_combine_rows(self, tmp_path):
         _write_case_output(tmp_path, "case_a", 0, [_row("A", 0, 1.0), _row("A", 0, 3.0)])
         _write_case_output(tmp_path, "case_a", 1, [_row("A", 1, 5.0), _row("A", 1, 7.0)])
