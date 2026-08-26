@@ -6,12 +6,14 @@ import pytest
 
 from access.esmf_trace.config import PostRunSettings, PostSummarySettings
 from access.esmf_trace.postprocess import (
+    DISPLAY_COLUMNS,
     PUBLIC_COLUMNS,
     _prepare_summary_path,
     _select_summary_rows,
     _slice_per_series_iloc,
     _summarise_case,
     _to_public_table,
+    _warn_unmatched_components,
     post_summary_from_yaml,
 )
 
@@ -418,6 +420,27 @@ class TestPostSummaryFromYaml:
         # must not appear in a file it never asked for
         assert {r["case_name"] for r in json.loads(run_save.read_text())} == {"case_b"}
 
+    def test_printed_row_labels_are_not_truncated(self, tmp_path, capsys):
+        # pandas' default 50-char cap would shorten these to a common prefix,
+        # making every row look identical in the printed table.
+        long_component = "[ESMF]/[ensemble] RunPhase1/[ESM0001] RunPhase1/[OCN] RunPhase1"
+        case = "postprocessing_MC-100km-ryf_node_1_queue_normalsr_shared_13_ocn_91"
+        _write_case_output(tmp_path, case, 0, [_row(long_component, 0, 1.0)])
+        defaults = PostSummarySettings(post_base_path=tmp_path)
+        post_summary_from_yaml(defaults, [PostRunSettings(name=case)])
+
+        printed = capsys.readouterr().out
+        assert f"{case}/output000/{long_component}" in printed
+        assert "..." not in printed
+
+    def test_printed_table_keeps_every_column(self, tmp_path, capsys):
+        _write_case_output(tmp_path, "case_a", 0, [_row("A", 0, 1.0), _row("A", 0, 3.0)])
+        defaults = PostSummarySettings(post_base_path=tmp_path)
+        post_summary_from_yaml(defaults, [PostRunSettings(name="case_a")])
+        printed = capsys.readouterr().out
+        for col in DISPLAY_COLUMNS:
+            assert col in printed
+
     def test_missing_case_directory_is_skipped_not_fatal(self, tmp_path, capsys):
         _write_case_output(tmp_path, "case_a", 0, [_row("A", 0, 1.0)])
         defaults = PostSummarySettings(post_base_path=tmp_path)
@@ -466,7 +489,21 @@ class TestUnmatchedComponentWarning:
         self._run(tmp_path, ["OCN", "a", "b", "c", "d", "e"])
         out = capsys.readouterr().out
         assert "5 of 6 requested" in out
-        assert "(+2 more)" in out  # 5 missing, 3 listed
+        # the remainder count depends on max_listed, so derive it rather than
+        # hardcoding the default
+        listed = sum(1 for name in "abcde" if f" {name}," in out or f" {name} " in out)
+        assert f"(+{5 - listed} more)" in out
+
+    @pytest.mark.parametrize("max_listed, expected", [(1, "(+4 more)"), (2, "(+3 more)"), (5, None)])
+    def test_max_listed_controls_the_remainder_count(self, max_listed, expected, capsys):
+        df = pd.DataFrame({"model_component": ["OCN"], "__case_name": ["case_a"]})
+        _warn_unmatched_components(df, {"a", "b", "c", "d", "e"}, max_listed=max_listed)
+        out = capsys.readouterr().out
+        assert "5 of 5 requested" in out
+        if expected is None:
+            assert "more)" not in out
+        else:
+            assert expected in out
 
     def test_warning_does_not_change_the_result(self, tmp_path, capsys):
         summary = self._run(tmp_path, ["OCN", "ATM"])

@@ -461,7 +461,11 @@ def post_summary_from_yaml(
 
     print("\n")
     print("-- Summary table:")
-    print(all_runs_table.loc[:, [c for c in DISPLAY_COLUMNS if c in all_runs_table.columns]])
+
+    # to_string() rather than print(df): the row label is the row's identity,
+    # and pandas' default 50-char cap truncates these to a common prefix that
+    # makes every row look the same. It also keeps every column and row.
+    print(all_runs_table.loc[:, [c for c in DISPLAY_COLUMNS if c in all_runs_table.columns]].to_string())
 
     all_runs_out = _prepare_summary_path(all_runs_summary_path or defaults.all_runs_summary_path)
 
