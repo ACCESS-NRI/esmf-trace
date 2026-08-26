@@ -316,7 +316,7 @@ class TestPostSummaryFromYaml:
         assert out.index.name == "name"
         assert "tavg" in out.columns
 
-    def test_combined_table_column_order(self, tmp_path):
+    def test_all_runs_table_column_order(self, tmp_path):
         _write_case_output(tmp_path, "case_a", 0, [_row("A", 0, 1.0)])
         defaults, runs = self._settings(tmp_path)
         out = post_summary_from_yaml(defaults, runs)
@@ -330,9 +330,9 @@ class TestPostSummaryFromYaml:
         assert not [c for c in out.columns if c.startswith("__")]
         assert not out.index.name.startswith("__")
 
-    def test_ncpus_reaches_the_combined_table(self, tmp_path):
+    def test_ncpus_reaches_the_all_runs_table(self, tmp_path):
         # the pooled 'combine' row spans two PETs; without ncpus in the
-        # combined output that distinct-PET count is invisible.
+        # all-runs output that distinct-PET count is invisible.
         _write_case_output(tmp_path, "case_a", 0, [_row("A", 0, 1.0), _row("A", 0, 3.0)])
         _write_case_output(tmp_path, "case_a", 1, [_row("A", 1, 5.0), _row("A", 1, 7.0)])
         defaults, runs = self._settings(tmp_path)
@@ -342,11 +342,11 @@ class TestPostSummaryFromYaml:
         assert out.loc["case_a/output000/A", "ncpus"] == 1
         assert out.loc["case_a/output001/A", "ncpus"] == 1
 
-    def test_ncpus_reaches_the_combined_json_and_parquet(self, tmp_path):
+    def test_ncpus_reaches_the_all_runs_json_and_parquet(self, tmp_path):
         _write_case_output(tmp_path, "case_a", 0, [_row("A", 0, 1.0)])
         _write_case_output(tmp_path, "case_a", 1, [_row("A", 1, 5.0)])
         defaults, runs = self._settings(tmp_path)
-        save_path = tmp_path / "out" / "combined.json"
+        save_path = tmp_path / "out" / "all_runs.json"
         post_summary_from_yaml(defaults, runs, all_runs_summary_path=save_path)
 
         saved = json.loads(save_path.read_text())
@@ -354,7 +354,7 @@ class TestPostSummaryFromYaml:
         combine_row = next(r for r in saved if "/combine/" in r["name"])
         assert combine_row["ncpus"] == 2
 
-        parquet = pd.read_parquet(tmp_path / "out" / "combined_table.parquet")
+        parquet = pd.read_parquet(tmp_path / "out" / "all_runs_table.parquet")
         assert "ncpus" in parquet.columns
         assert parquet.loc["case_a/combine/A", "ncpus"] == 2
 
@@ -377,13 +377,13 @@ class TestPostSummaryFromYaml:
         with pytest.raises(ValueError, match="include_combined"):
             post_summary_from_yaml(defaults, runs, include_combined=False, include_per_output=False)
 
-    def test_saves_combined_json_and_parquet(self, tmp_path):
+    def test_saves_all_runs_json_and_parquet(self, tmp_path):
         _write_case_output(tmp_path, "case_a", 0, [_row("A", 0, 1.0), _row("A", 0, 3.0)])
         defaults, runs = self._settings(tmp_path)
-        save_path = tmp_path / "out" / "combined.json"
+        save_path = tmp_path / "out" / "all_runs.json"
         post_summary_from_yaml(defaults, runs, all_runs_summary_path=save_path)
         assert save_path.is_file()
-        assert (tmp_path / "out" / "combined_table.parquet").is_file()
+        assert (tmp_path / "out" / "all_runs_table.parquet").is_file()
 
     def test_per_run_summary_path_writes_only_selected_rows(self, tmp_path):
         _write_case_output(tmp_path, "case_a", 0, [_row("A", 0, 1.0), _row("A", 0, 3.0)])
@@ -457,7 +457,7 @@ class TestToPublicTable:
 class TestOutputSchemaParity:
     """
     The per-run JSON used to expose raw '__row_label'/'__case_name'/
-    '__output_name' keys while the combined JSON used 'name' and dropped
+    '__output_name' keys while the all-runs JSON used 'name' and dropped
     model_component, so one command produced two differently shaped files.
     """
 
@@ -465,41 +465,41 @@ class TestOutputSchemaParity:
         _write_case_output(tmp_path, "case_a", 0, [_row("A", 0, 1.0), _row("A", 0, 3.0)])
         _write_case_output(tmp_path, "case_a", 1, [_row("A", 1, 5.0), _row("A", 1, 7.0)])
         run_save = tmp_path / "per_run.json"
-        combined_save = tmp_path / "combined.json"
+        all_runs_save = tmp_path / "all_runs.json"
         defaults = PostSummarySettings(post_base_path=tmp_path)
         runs = [PostRunSettings(name="case_a", summary_path=run_save)]
-        table = post_summary_from_yaml(defaults, runs, all_runs_summary_path=combined_save)
-        return json.loads(run_save.read_text()), json.loads(combined_save.read_text()), table
+        table = post_summary_from_yaml(defaults, runs, all_runs_summary_path=all_runs_save)
+        return json.loads(run_save.read_text()), json.loads(all_runs_save.read_text()), table
 
     def test_both_json_files_share_one_schema(self, tmp_path):
-        per_run, combined, _ = self._run(tmp_path)
-        assert sorted(per_run[0].keys()) == sorted(combined[0].keys())
+        per_run, all_runs, _ = self._run(tmp_path)
+        assert sorted(per_run[0].keys()) == sorted(all_runs[0].keys())
 
     def test_neither_file_leaks_internal_columns(self, tmp_path):
-        per_run, combined, _ = self._run(tmp_path)
-        for rows in (per_run, combined):
+        per_run, all_runs, _ = self._run(tmp_path)
+        for rows in (per_run, all_runs):
             assert not [k for k in rows[0] if k.startswith("__")]
 
     def test_both_files_carry_the_public_columns(self, tmp_path):
-        per_run, combined, _ = self._run(tmp_path)
-        for rows in (per_run, combined):
+        per_run, all_runs, _ = self._run(tmp_path)
+        for rows in (per_run, all_runs):
             assert sorted(rows[0].keys()) == sorted(PUBLIC_COLUMNS)
 
-    def test_model_component_survives_into_the_combined_file(self, tmp_path):
-        _, combined, _ = self._run(tmp_path)
-        assert all(row["model_component"] == "A" for row in combined)
+    def test_model_component_survives_into_the_all_runs_file(self, tmp_path):
+        _, all_runs, _ = self._run(tmp_path)
+        assert all(row["model_component"] == "A" for row in all_runs)
 
     def test_returned_table_matches_the_file_schema(self, tmp_path):
-        _, combined, table = self._run(tmp_path)
-        assert sorted([table.index.name, *table.columns]) == sorted(combined[0].keys())
+        _, all_runs, table = self._run(tmp_path)
+        assert sorted([table.index.name, *table.columns]) == sorted(all_runs[0].keys())
 
     def test_parquet_matches_the_file_schema(self, tmp_path):
-        _, combined, _ = self._run(tmp_path)
-        parquet = pd.read_parquet(tmp_path / "combined_table.parquet")
-        assert sorted([parquet.index.name, *parquet.columns]) == sorted(combined[0].keys())
+        _, all_runs, _ = self._run(tmp_path)
+        parquet = pd.read_parquet(tmp_path / "all_runs_table.parquet")
+        assert sorted([parquet.index.name, *parquet.columns]) == sorted(all_runs[0].keys())
 
     def test_printed_table_is_narrowed_but_files_are_not(self, tmp_path, capsys):
-        _, combined, _ = self._run(tmp_path)
+        _, all_runs, _ = self._run(tmp_path)
         printed = capsys.readouterr().out
         # the long, repeated columns are omitted from the terminal view only;
         # pandas may still elide middle columns, so check the outer ones.
@@ -507,4 +507,4 @@ class TestOutputSchemaParity:
         assert "case_name" not in printed
         assert "ncpus" in printed
         assert "pemax" in printed
-        assert all("model_component" in row for row in combined)
+        assert all("model_component" in row for row in all_runs)

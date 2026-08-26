@@ -39,7 +39,8 @@ def post_summary_from_config(
     include_per_output: bool | None = None,
 ):
     """
-    Load a post-summary config and build the combined summary table from it.
+    Load a post-summary config and build the summary table spanning every
+    run listed in it.
 
     config_path: either a yaml path or a dict with the same structure.
     post_overrides: optional dict of PostSummarySettings field overrides,
@@ -49,10 +50,11 @@ def post_summary_from_config(
     all_runs_summary_path: where to write the summary table spanning every
         run. Must end in ".json"; a sibling "<stem>_table.parquet" is
         written alongside it. Overrides the config's own value if given.
-    include_combined: include the rows pooled across selected outputs.
+    include_combined: include the "combine" rows, which pool a case's
+        selected outputs. Unrelated to the across-runs stacking above.
     include_per_output: include one row per selected output.
 
-    Returns the combined summary as a DataFrame (see
+    Returns the all-runs summary as a DataFrame (see
     postprocess.post_summary_from_yaml).
     """
 

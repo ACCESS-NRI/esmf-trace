@@ -208,7 +208,7 @@ class TestParsePostSummaryConfigPerRunInheritance:
         assert runs[0].output_index is None
 
     def test_per_run_summary_path_does_not_inherit_default(self, tmp_path):
-        save_path = tmp_path / "combined.json"
+        save_path = tmp_path / "all_runs.json"
         data = _base_post_summary_data(all_runs_summary_path=str(save_path))
         data["runs"] = [{"name": "case_a"}]
         _, runs = parse_post_summary_config(data)

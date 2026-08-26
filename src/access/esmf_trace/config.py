@@ -108,10 +108,9 @@ class PostSummarySettings:
     all_runs_summary_path: where to write the summary table spanning every
         run. Must end in ".json"; a sibling "<stem>_table.parquet" is
         written alongside it. None means don't save.
-    include_combined: include the pooled-across-outputs "combine" row per
-        (case, component). Note this is a different axis from
-        all_runs_summary_path: "combined" here means pooled across the
-        outputs of one case, not across runs.
+    include_combined: include the "combine" row per (case, component),
+        pooling that case's outputs. This is a different axis from
+        all_runs_summary_path, which stacks whole runs together.
     include_per_output: include one row per (case, output, component).
         At least one of include_combined/include_per_output must be true.
     """
@@ -134,12 +133,12 @@ class PostRunSettings:
     left unset (None) falls back to the corresponding PostSummarySettings
     default, except summary_path, which is opt-in per run and has no default
     to inherit - the config-wide all_runs_summary_path is a different
-    destination, holding the table combined across all runs.
+    destination, holding the table stacked across every run.
 
     name: case name; must match a subdirectory under post_base_path.
     output_index: which outputNNN directories to include; None means all.
     summary_path: if set, write this run's own summary rows to this path
-        (in addition to it contributing to the combined table). Must end in
+        (in addition to it contributing to the all-runs table). Must end in
         ".json".
     """
 

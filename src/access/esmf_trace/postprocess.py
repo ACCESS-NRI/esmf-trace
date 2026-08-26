@@ -257,7 +257,7 @@ def _prepare_summary_path(summary_path: str | Path | None) -> Path | None:
 
 # Internal bookkeeping columns are '__'-prefixed; these are their public
 # names. Everything written to disk or handed back to a caller goes through
-# _to_public_table, so the per-run and combined outputs share one schema.
+# _to_public_table, so the per-run and all-runs outputs share one schema.
 _PUBLIC_RENAMES = {
     "__row_label": "name",
     "__case_name": "case_name",
@@ -291,9 +291,9 @@ def _to_public_table(df: pd.DataFrame) -> pd.DataFrame:
     Rename the internal '__'-prefixed columns to their public names and order
     them as PUBLIC_COLUMNS.
 
-    Both the per-run and the combined output are written from this, so the
+    Both the per-run and the all-runs output are written from this, so the
     two files always share a schema; previously the per-run JSON exposed raw
-    '__row_label'/'__case_name'/'__output_name' keys while the combined one
+    '__row_label'/'__case_name'/'__output_name' keys while the all-runs one
     used 'name' and dropped model_component entirely.
     """
     renamed = df.rename(columns=_PUBLIC_RENAMES)
@@ -337,33 +337,37 @@ def post_summary_from_yaml(
     include_per_output: bool | None = None,
 ) -> pd.DataFrame:
     """
-    Summarise *_timeseries.json files for every run and build a combined
-    table across all of them. This is the shared implementation behind both
+    Summarise *_timeseries.json files for every run and stack them into one
+    table spanning all of them. This is the shared implementation behind both
     the `post-summary-from-yaml` CLI command and post_summary_from_config().
+
+    Two different poolings are in play, on separate axes. Within a case,
+    include_combined controls the 'combine' rows that pool a case's outputs.
+    Across cases, every selected run is stacked into the returned table and
+    written to all_runs_summary_path. "Combined" refers only to the former.
 
     defaults, runs: as produced by config.parse_post_summary_config() /
         config.load_post_summary_config().
     all_runs_summary_path: if given, overrides defaults.all_runs_summary_path
-        as the destination for the combined summary. Must end in ".json";
+        as the destination for the all-runs summary. Must end in ".json";
         writing it also writes a sibling "<stem>_table.parquet" of the
-        cleaned, indexed table.
+        indexed table.
     include_combined, include_per_output: override defaults.include_combined
         / defaults.include_per_output for this call; None keeps the
         default's value. At least one must end up true.
 
     For each run: collects its timeseries JSONs, summarises them, filters to
     the requested row kinds, optionally writes that run's own selection to
-    its `summary_path`, then folds it into the combined table. Prints a
-    narrowed view of the combined table (DISPLAY_COLUMNS) before returning
-    the full one; per-run and combined output share the PUBLIC_COLUMNS
-    schema.
+    its `summary_path`, then folds it into the all-runs table. Prints a
+    narrowed view of that table (DISPLAY_COLUMNS) before returning the full
+    one; per-run and all-runs output share the PUBLIC_COLUMNS schema.
 
     Raises ValueError if both include flags resolve to false, or if no run
     produced any rows (e.g. every case directory was missing or every row
     was filtered out) - not SystemExit, so this is safe to call as a library
     function as well as from the CLI.
 
-    Returns the combined table as a DataFrame indexed by row label ("name"),
+    Returns the all-runs table as a DataFrame indexed by row label ("name"),
     carrying the remaining PUBLIC_COLUMNS.
     """
     post_base_path: Path = Path(defaults.post_base_path)
@@ -418,23 +422,25 @@ def post_summary_from_yaml(
     if not per_case_tables:
         raise ValueError("No rows produced. Check config selections and filters.")
 
-    # Build combined table across all selected runs
-    combined_df = _to_public_table(pd.concat(per_case_tables, ignore_index=True))
-    clean_df = combined_df.set_index("name")
+    # Stack every selected run into one table. Note this is a different axis
+    # from the 'combine' rows inside each case: those pool a case's outputs,
+    # this pools the cases themselves.
+    all_runs_df = _to_public_table(pd.concat(per_case_tables, ignore_index=True))
+    all_runs_table = all_runs_df.set_index("name")
 
     print("\n")
     print("-- Summary table:")
-    print(clean_df.loc[:, [c for c in DISPLAY_COLUMNS if c in clean_df.columns]])
+    print(all_runs_table.loc[:, [c for c in DISPLAY_COLUMNS if c in all_runs_table.columns]])
 
-    combined_out = _prepare_summary_path(all_runs_summary_path or defaults.all_runs_summary_path)
+    all_runs_out = _prepare_summary_path(all_runs_summary_path or defaults.all_runs_summary_path)
 
-    if combined_out is not None:
-        combined_df.to_json(combined_out, orient="records", indent=2)
+    if all_runs_out is not None:
+        all_runs_df.to_json(all_runs_out, orient="records", indent=2)
         print("\n")
-        print(f"-- saved combined summary json: {combined_out}")
+        print(f"-- saved all-runs summary json: {all_runs_out}")
 
-        clean_parquet = combined_out.with_name(combined_out.stem + "_table.parquet")
-        clean_df.to_parquet(clean_parquet, index=True)
-        print(f"-- saved cleaned table parquet: {clean_parquet}")
+        all_runs_parquet = all_runs_out.with_name(all_runs_out.stem + "_table.parquet")
+        all_runs_table.to_parquet(all_runs_parquet, index=True)
+        print(f"-- saved all-runs table parquet: {all_runs_parquet}")
 
-    return clean_df
+    return all_runs_table
