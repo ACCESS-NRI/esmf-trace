@@ -40,19 +40,43 @@ def _slice_per_series_iloc(
     end: int | None,
 ) -> pd.DataFrame:
     """
-    Slice rows per (group) using iloc[start:end] in each group after sorting by order_cols
-    If both start and end are None -> no slicing (full series).
-    If end is None -> no slicing (full series).
+    Slice rows per group using iloc[start:end], after sorting each group by
+    order_cols. Used to trim a fixed number of samples off each per-(case,
+    output, component, pet) timeseries before computing stats (e.g. to skip
+    spin-up).
+
+    group_cols: columns identifying one independent series (rows sharing the
+        same values across all of these are sorted and sliced together).
+    order_cols: columns to sort each group by before slicing (e.g. "start").
+    start, end: iloc slice bounds, same semantics as Python's slice(start,
+        end) - e.g. start=1 keeps from the 2nd row onward, end=1 keeps only
+        the 1st row. If both are None, the frame is returned unchanged
+        (no slicing, no copy).
+
+    Grouping uses dropna=False, matching every aggregation in
+    _summarise_case. With pandas' default (dropna=True) a row with a missing
+    group key - e.g. a null model_component - is dropped by the groupby, so
+    merely setting stats_start_index would silently change which rows are
+    counted rather than only how many samples each series contributes.
+
+    Returns an empty frame (not an error) if df is empty, or if every group
+    ends up empty after slicing.
     """
     if start is None and end is None:
         return df
 
+    if df.empty:
+        return df.copy()
+
     sl = slice(start, end)
     groups = []
 
-    for _, g in df.groupby(group_cols, sort=False):
+    for _, g in df.groupby(group_cols, sort=False, dropna=False):
         g_sorted = g.sort_values(order_cols, kind="mergesort")
         groups.append(g_sorted.iloc[sl])
+
+    if not groups:
+        return df.iloc[0:0].copy()
 
     return pd.concat(groups, ignore_index=True)
 
@@ -84,6 +108,36 @@ def _collect_case_jsons(
     return jsons
 
 
+def _warn_unmatched_components(df: pd.DataFrame, requested: set[str], max_listed: int = 2) -> None:
+    """
+    Warn about requested model_component selectors that match nothing here.
+
+    Post-summary can only select from what the timeseries JSONs already
+    contain - a component the upstream run-from-yaml step never captured is
+    simply absent and silently yields no rows.
+
+    max_listed caps how many selectors are named before the rest are
+    summarised as a count; full ESMF selectors are long enough that listing
+    every one buries the message.
+    """
+    if df.empty or "model_component" not in df.columns:
+        return
+
+    available = set(df["model_component"].astype(str).str.strip())
+    missing = sorted(requested - available)
+    if not missing:
+        return
+
+    case = df["__case_name"].iloc[0] if "__case_name" in df.columns else "?"
+    shown = ", ".join(missing[:max_listed])
+    if len(missing) > max_listed:
+        shown += f" (+{len(missing) - max_listed} more)"
+    print(
+        f"-- warning: {len(missing)} of {len(requested)} requested model_component(s) "
+        f"matched no rows in {case}: {shown}"
+    )
+
+
 def _summarise_case(
     json_paths: list[Path],
     model_component: list[str] | None,
@@ -92,12 +146,29 @@ def _summarise_case(
     stats_end_index: int | None,
 ) -> pd.DataFrame:
     """
-    Summarise multiple output directories belonging to a single case.
+    Load, filter and summarise the timeseries JSONs for a single case.
+
+    json_paths: *_timeseries.json files to load and pool (as produced by
+        _collect_case_jsons for one case).
+    model_component: keep only these component selector strings; None keeps
+        all.
+    pets: keep only these PET indices; None keeps all.
+    stats_start_index, stats_end_index: per-series iloc slice applied (via
+        _slice_per_series_iloc) before aggregating, so stats reflect only
+        the selected sample range.
 
     Returns rows for:
-      - each (case, outputNNN, model_component),
-      - each (case, model_component) with __output_name='combine' (per-component combine)
+      - each (case, outputNNN, model_component): stats over that output's
+        own samples only.
+      - each (case, model_component) with __output_name='combine': stats
+        computed directly from the raw samples pooled across every selected
+        output and PET for that component (not by averaging the per-output
+        stats above - hits/ncpus/tstd in particular are not meaningfully
+        combinable that way).
     NOTE: No case-level (component-agnostic) '<case>_combine' rows.
+
+    Returns an empty frame with the expected columns if json_paths is empty
+    or every row is filtered out.
     """
     output_cols = [
         "__row_label",
@@ -125,6 +196,7 @@ def _summarise_case(
     ts = df
     if model_component is not None:
         sel = {s.strip() for s in model_component}
+        _warn_unmatched_components(df, sel)
         ts = ts[ts["model_component"].astype(str).str.strip().isin(sel)]
     if pets is not None:
         allowed = {int(p) for p in pets}
@@ -142,7 +214,7 @@ def _summarise_case(
         tmin=("duration_s", "min"),
         tmax=("duration_s", "max"),
         tavg=("duration_s", "mean"),
-        tmedian=("duration_s", lambda x: x.quantile(0.50)),
+        tmedian=("duration_s", "median"),
         tstd=("duration_s", "std"),
     ).reset_index()
 
@@ -174,21 +246,19 @@ def _summarise_case(
     )
     per_output = per_output.sort_values(["__case_name", "__output_index", "model_component"], kind="mergesort")
 
-    combined_by_comp = (
-        per_output.groupby(["__case_name", "model_component"], sort=False, dropna=False)
-        .agg(
-            hits=("hits", "mean"),
-            tmin=("tmin", "min"),
-            tmax=("tmax", "max"),
-            tavg=("tavg", "mean"),
-            tmedian=("tmedian", "mean"),
-            tstd=("tstd", "mean"),
-            pemin=("pemin", "min"),
-            pemax=("pemax", "max"),
-            ncpus=("ncpus", "mean"),
-        )
-        .reset_index()
-    )
+    grp_comp = ts.groupby(["__case_name", "model_component"], sort=False, dropna=False)
+    combined_by_comp = grp_comp.agg(
+        hits=("duration_s", "count"),
+        tmin=("duration_s", "min"),
+        tmax=("duration_s", "max"),
+        tavg=("duration_s", "mean"),
+        tmedian=("duration_s", "median"),
+        tstd=("duration_s", "std"),
+        ncpus=("pet", "nunique"),
+        pemin=("pet", "min"),
+        pemax=("pet", "max"),
+    ).reset_index()
+
     combined_by_comp["__output_name"] = "combine"
     combined_by_comp["__row_label"] = (
         combined_by_comp["__case_name"] + "/combine/" + combined_by_comp["model_component"].astype(str).str.strip()
@@ -197,25 +267,148 @@ def _summarise_case(
     return pd.concat([per_output[output_cols], combined_by_comp[output_cols]], ignore_index=True)
 
 
-def _resolve_save_json_path(save_json_path: str | None) -> Path | None:
-    if save_json_path is None:
+def _prepare_summary_path(summary_path: str | Path | None) -> Path | None:
+    """
+    Validate a summary destination and ensure its parent directory exists.
+
+    Returns None unchanged if summary_path is None (meaning "don't save"),
+    so callers can pass an unset path straight through. Otherwise expands
+    the path, requires a ".json" suffix (raising ValueError if it doesn't
+    have one), creates the parent directory if needed, and returns the
+    resolved Path.
+    """
+    if summary_path is None:
         return None
-    p = Path(save_json_path).expanduser()
+    p = Path(summary_path).expanduser()
     if p.suffix.lower() != ".json":
-        raise ValueError(f"Invalid save_json_path: {p} — must explicitly end with '.json'!")
+        raise ValueError(f"Invalid summary path: {p} — must explicitly end with '.json'!")
     p.parent.mkdir(parents=True, exist_ok=True)
     return p
+
+
+# Internal bookkeeping columns are '__'-prefixed; these are their public
+# names. Everything written to disk or handed back to a caller goes through
+# _to_public_table, so the per-run and all-runs outputs share one schema.
+_PUBLIC_RENAMES = {
+    "__row_label": "name",
+    "__case_name": "case_name",
+    "__output_name": "output_name",
+}
+
+PUBLIC_COLUMNS = [
+    "name",
+    "case_name",
+    "output_name",
+    "model_component",
+    "ncpus",
+    "hits",
+    "tmin",
+    "tmax",
+    "tavg",
+    "tmedian",
+    "tstd",
+    "pemin",
+    "pemax",
+]
+
+# Printed to the terminal. Narrower than PUBLIC_COLUMNS because case_name,
+# output_name and model_component are all repeated in the row label, and
+# real ESMF component selectors are far too long to tabulate.
+DISPLAY_COLUMNS = ["ncpus", "hits", "tmin", "tmax", "tavg", "tmedian", "tstd", "pemin", "pemax"]
+
+
+def _to_public_table(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Rename the internal '__'-prefixed columns to their public names and order
+    them as PUBLIC_COLUMNS.
+
+    Both the per-run and the all-runs output are written from this, so the
+    two files always share a schema; previously the per-run JSON exposed raw
+    '__row_label'/'__case_name'/'__output_name' keys while the all-runs one
+    used 'name' and dropped model_component entirely.
+    """
+    renamed = df.rename(columns=_PUBLIC_RENAMES)
+    return renamed.loc[:, [c for c in PUBLIC_COLUMNS if c in renamed.columns]]
+
+
+def _select_summary_rows(
+    summary: pd.DataFrame,
+    *,
+    include_combined: bool,
+    include_per_output: bool,
+) -> pd.DataFrame:
+    """
+    Filter a _summarise_case() result down to the requested row kinds.
+
+    summary: a frame with an "__output_name" column, where the pooled
+        per-component row is labelled "combine" and all other values are
+        per-output rows.
+    include_per_output: keep rows where __output_name != "combine".
+    include_combined: keep rows where __output_name == "combine".
+
+    Raises ValueError if both flags are false, since that would select
+    nothing.
+    """
+    if not include_combined and not include_per_output:
+        raise ValueError("At least one of include_combined or include_per_output must be true")
+
+    selected = []
+    if include_per_output:
+        selected.append(summary[summary["__output_name"] != "combine"])
+    if include_combined:
+        selected.append(summary[summary["__output_name"] == "combine"])
+    return pd.concat(selected, ignore_index=True)
 
 
 def post_summary_from_yaml(
     defaults: PostSummarySettings,
     runs: list[PostRunSettings],
-    save_json_path: str | None = None,
+    all_runs_summary_path: str | Path | None = None,
+    include_combined: bool | None = None,
+    include_per_output: bool | None = None,
 ) -> pd.DataFrame:
+    """
+    Summarise *_timeseries.json files for every run and stack them into one
+    table spanning all of them. This is the shared implementation behind both
+    the `post-summary-from-yaml` CLI command and post_summary_from_config().
+
+    Two different poolings are in play, on separate axes. Within a case,
+    include_combined controls the 'combine' rows that pool a case's outputs.
+    Across cases, every selected run is stacked into the returned table and
+    written to all_runs_summary_path. "Combined" refers only to the former.
+
+    defaults, runs: as produced by config.parse_post_summary_config() /
+        config.load_post_summary_config().
+    all_runs_summary_path: if given, overrides defaults.all_runs_summary_path
+        as the destination for the all-runs summary. Must end in ".json";
+        writing it also writes a sibling "<stem>_table.parquet" of the
+        indexed table.
+    include_combined, include_per_output: override defaults.include_combined
+        / defaults.include_per_output for this call; None keeps the
+        default's value. At least one must end up true.
+
+    For each run: collects its timeseries JSONs, summarises them, filters to
+    the requested row kinds, optionally writes that run's own selection to
+    its `summary_path`, then folds it into the all-runs table. Prints a
+    narrowed view of that table (DISPLAY_COLUMNS) before returning the full
+    one; per-run and all-runs output share the PUBLIC_COLUMNS schema.
+
+    Raises ValueError if both include flags resolve to false, or if no run
+    produced any rows (e.g. every case directory was missing or every row
+    was filtered out) - not SystemExit, so this is safe to call as a library
+    function as well as from the CLI.
+
+    Returns the all-runs table as a DataFrame indexed by row label ("name"),
+    carrying the remaining PUBLIC_COLUMNS.
+    """
     post_base_path: Path = Path(defaults.post_base_path)
     timeseries_suffix: str = defaults.timeseries_suffix
 
     per_case_tables: list[pd.DataFrame] = []
+    include_combined = defaults.include_combined if include_combined is None else include_combined
+    include_per_output = defaults.include_per_output if include_per_output is None else include_per_output
+    if not include_combined and not include_per_output:
+        raise ValueError("At least one of include_combined or include_per_output must be true")
 
     for r in runs:
         case_name = r.name
@@ -238,40 +431,51 @@ def post_summary_from_yaml(
         if case_summary.empty:
             continue
 
-        # Save per-run json if this run specified a save path (strict .json)
-        per_run_save = _resolve_save_json_path(r.save_json_path)
+        selected_case_summary = _select_summary_rows(
+            case_summary,
+            include_combined=include_combined,
+            include_per_output=include_per_output,
+        )
+
+        # Save per-run json if this run specified a path (strict .json);
+        # _prepare_summary_path returns None when the run didn't set one.
+        per_run_save = _prepare_summary_path(r.summary_path)
         if per_run_save is not None:
             (
-                case_summary.reset_index(drop=True).to_json(  # ensure a clean row index
-                    per_run_save, orient="records", indent=2
-                )
+                _to_public_table(selected_case_summary)
+                .reset_index(drop=True)  # ensure a clean row index
+                .to_json(per_run_save, orient="records", indent=2)
             )
             print(f"-- saved per-run summary JSON: {per_run_save}")
 
-        per_case_tables.append(case_summary)
+        per_case_tables.append(selected_case_summary)
 
     if not per_case_tables:
-        raise SystemExit("No rows produced. Check YAML selections and filters.")
+        raise ValueError("No rows produced. Check config selections and filters.")
 
-    # Build combined table across all selected runs
-    combined_df = pd.concat(per_case_tables, ignore_index=True)
-
-    wanted_cols = ["__row_label", "hits", "tmin", "tmax", "tavg", "tmedian", "tstd", "pemin", "pemax"]
-    combined_df = combined_df.loc[:, [c for c in wanted_cols if c in combined_df.columns]]
-
-    clean_df = combined_df.rename(columns={"__row_label": "name"}).set_index("name")
+    # Stack every selected run into one table. Note this is a different axis
+    # from the 'combine' rows inside each case: those pool a case's outputs,
+    # this pools the cases themselves.
+    all_runs_df = _to_public_table(pd.concat(per_case_tables, ignore_index=True))
+    all_runs_table = all_runs_df.set_index("name")
 
     print("\n")
     print("-- Summary table:")
-    print(clean_df)
 
-    combined_out = _resolve_save_json_path(save_json_path or defaults.save_json_path)
+    # to_string() rather than print(df): the row label is the row's identity,
+    # and pandas' default 50-char cap truncates these to a common prefix that
+    # makes every row look the same. It also keeps every column and row.
+    print(all_runs_table.loc[:, [c for c in DISPLAY_COLUMNS if c in all_runs_table.columns]].to_string())
 
-    if combined_out is not None:
-        (combined_df.rename(columns={"__row_label": "name"}).to_json(combined_out, orient="records", indent=2))
+    all_runs_out = _prepare_summary_path(all_runs_summary_path or defaults.all_runs_summary_path)
+
+    if all_runs_out is not None:
+        all_runs_df.to_json(all_runs_out, orient="records", indent=2)
         print("\n")
-        print(f"-- saved combined summary json: {combined_out}")
+        print(f"-- saved all-runs summary json: {all_runs_out}")
 
-        clean_parquet = combined_out.with_name(combined_out.stem + "_table.parquet")
-        clean_df.to_parquet(clean_parquet, index=True)
-        print(f"-- saved cleaned table parquet: {clean_parquet}")
+        all_runs_parquet = all_runs_out.with_name(all_runs_out.stem + "_table.parquet")
+        all_runs_table.to_parquet(all_runs_parquet, index=True)
+        print(f"-- saved all-runs table parquet: {all_runs_parquet}")
+
+    return all_runs_table

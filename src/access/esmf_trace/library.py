@@ -3,7 +3,7 @@ from dataclasses import replace
 from pathlib import Path
 
 from .batch_runs import run_batch_jobs
-from .config import DefaultSettings, PostRunSettings, PostSummarySettings, RunSettings, load_yaml_config
+from .config import DefaultSettings, RunSettings, _norm_pets, load_post_summary_config, load_yaml_config
 from .postprocess import post_summary_from_yaml
 from .utils import normalise_str_list
 
@@ -34,27 +34,38 @@ def run_from_config(
 def post_summary_from_config(
     config_path: str | Path | dict,
     post_overrides: dict | None = None,
-    save_json_path: str | Path | None = None,
+    all_runs_summary_path: str | Path | None = None,
+    include_combined: bool | None = None,
+    include_per_output: bool | None = None,
 ):
     """
-    Either a yaml path or a dict with the same structure.
+    Load a post-summary config and build the summary table spanning every
+    run listed in it.
 
-    post_overrides: optional dict of PostSummarySettings field overrides
-    e.g. {"timeseries_suffix": "_timeseries.json", "stats_start_index": 1}
+    config_path: either a yaml path or a dict with the same structure.
+    post_overrides: optional dict of PostSummarySettings field overrides,
+        applied to every run (not just where a run itself left the field
+        unset) - e.g. {"timeseries_suffix": "_timeseries.json",
+        "stats_start_index": 1}. Unrecognised keys raise ConfigError.
+    all_runs_summary_path: where to write the summary table spanning every
+        run. Must end in ".json"; a sibling "<stem>_table.parquet" is
+        written alongside it. Overrides the config's own value if given.
+    include_combined: include the "combine" rows, which pool a case's
+        selected outputs. Unrelated to the across-runs stacking above.
+    include_per_output: include one row per selected output.
+
+    Returns the all-runs summary as a DataFrame (see
+    postprocess.post_summary_from_yaml).
     """
 
-    if isinstance(config_path, (str, Path)):
-        defaults, runs = load_yaml_config(Path(config_path), kind="post-summary")
-        assert isinstance(defaults, PostSummarySettings)
-    else:
-        defaults = PostSummarySettings(**config_path["default_settings"])
-        runs = [PostRunSettings(**r) for r in config_path["runs"]]
-
-    if post_overrides:
-        defaults = replace(defaults, **dict(post_overrides))
-
-    out_path = str(save_json_path) if save_json_path is not None else None
-    post_summary_from_yaml(defaults, runs, save_json_path=out_path)
+    defaults, runs = load_post_summary_config(config_path, default_overrides=post_overrides)
+    return post_summary_from_yaml(
+        defaults,
+        runs,
+        all_runs_summary_path=all_runs_summary_path,
+        include_combined=include_combined,
+        include_per_output=include_per_output,
+    )
 
 
 class ACCESSRunConfigBuilder:
@@ -121,7 +132,7 @@ class ACCESSRunConfigBuilder:
         if not self.branches:
             raise ValueError("At least one branch must be provided.")
 
-        if normalise_str_list(self.model_component) is None:
+        if not normalise_str_list(self.model_component):
             raise ValueError("model_component must be a non-empty string or list[str].")
 
         if not isinstance(self.max_workers, int) or self.max_workers < 1:
@@ -225,15 +236,35 @@ class ACCESSPostSummaryConfigBuilder:
         self,
         post_base_path: str | Path,
         model_component: str | list[str] | None = None,
-        pets: str | list[int] | None = None,
+        pets: str | int | list[int] | None = None,
         stats_start_index: int | None = None,
         stats_end_index: int | None = None,
-        save_json_path: str | Path | None = None,
+        all_runs_summary_path: str | Path | None = None,
         timeseries_suffix: str = "_timeseries.json",
+        include_combined: bool = True,
+        include_per_output: bool = True,
         default_overwrite: dict | None = None,
     ) -> None:
         """
         Initialise a builder for esmf-trace post-summary configuration for ACCESS-style workflows.
+
+        post_base_path: root directory containing one subdirectory per case name.
+        model_component, pets, stats_start_index, stats_end_index,
+            all_runs_summary_path, timeseries_suffix: become the corresponding
+            default_settings entries in the built config (see build_config());
+            each is applied to every run unless a run dict overrides it
+            directly. all_runs_summary_path is the exception - it is the
+            across-all-runs destination and has no per-run counterpart to
+            inherit; a run opts in separately via its own summary_path.
+        include_combined: include the pooled-across-outputs "combine" row.
+        include_per_output: include one row per output. At least one of
+            include_combined/include_per_output must be true.
+        default_overwrite: extra key/value pairs merged into default_settings
+            last, so they take precedence over every field above (e.g.
+            {"timeseries_suffix": "_custom.json"}).
+
+        Raises ValueError if post_base_path is empty, or if both
+        include_combined and include_per_output are false.
         """
         self.post_base_path = Path(post_base_path)
         self.model_component = model_component
@@ -241,14 +272,19 @@ class ACCESSPostSummaryConfigBuilder:
         self.stats_start_index = stats_start_index
         self.stats_end_index = stats_end_index
         self.timeseries_suffix = timeseries_suffix
-        self.save_json_path = Path(save_json_path) if save_json_path is not None else None
+        self.all_runs_summary_path = Path(all_runs_summary_path) if all_runs_summary_path is not None else None
+        self.include_combined = include_combined
+        self.include_per_output = include_per_output
         self.default_overwrite = default_overwrite if default_overwrite is not None else {}
 
         self._validate()
 
     def _validate(self) -> None:
+        """Raise ValueError if post_base_path is empty, or both include flags are false."""
         if not str(self.post_base_path):
             raise ValueError("post_base_path must be a non-empty path string.")
+        if not self.include_combined and not self.include_per_output:
+            raise ValueError("At least one of include_combined or include_per_output must be true.")
 
     def build_config(self, runs: list[dict]) -> dict:
         """
@@ -257,12 +293,20 @@ class ACCESSPostSummaryConfigBuilder:
         minimum requirement per run:
             - {"name": "branch_name"}
         common fields all optional:
-            - pets: "0, 52" or [0, 52]
+            - pets: "0,52", "0,3-5" (ranges expand), [0, 52], or a bare 52;
+              always emitted as a sorted list[int]
             - model_component: list[str] or comma-separated str
             - output_index: "1,3-5,6" or [1,3,4,5,6]
             - stats_start_index: int
             - stats_end_index: int
-            - save_json_path: str or Path, must end with .json
+            - summary_path: str or Path, must end with .json; writes this
+              run's own rows, separate from all_runs_summary_path
+
+        The default_settings block always carries include_combined and
+        include_per_output (from the constructor args), in addition to
+        post_base_path and timeseries_suffix.
+
+        Raises ValueError if `runs` is empty.
         """
         if not isinstance(runs, list) or len(runs) == 0:
             raise ValueError("At least one run must be provided.")
@@ -270,22 +314,24 @@ class ACCESSPostSummaryConfigBuilder:
         default_settings: dict = {
             "post_base_path": str(self.post_base_path),
             "timeseries_suffix": self.timeseries_suffix,
+            "include_combined": self.include_combined,
+            "include_per_output": self.include_per_output,
         }
 
         default_settings["model_component"] = normalise_str_list(self.model_component)
 
+        # Normalise with the same helper the config parser uses, so the built
+        # dict can never contain a pets value the parser would then reject.
+        # Splitting on commas here is not enough: it leaves "3-5" as a literal
+        # string, which int() later chokes on.
         if self.pets is not None:
-            default_settings["pets"] = (
-                self.pets
-                if isinstance(self.pets, list)
-                else [s.strip() for s in str(self.pets).split(",") if s.strip()]
-            )
+            default_settings["pets"] = _norm_pets(self.pets)
         if self.stats_start_index is not None:
             default_settings["stats_start_index"] = self.stats_start_index
         if self.stats_end_index is not None:
             default_settings["stats_end_index"] = self.stats_end_index
-        if self.save_json_path is not None:
-            default_settings["save_json_path"] = str(self.save_json_path)
+        if self.all_runs_summary_path is not None:
+            default_settings["all_runs_summary_path"] = str(self.all_runs_summary_path)
 
         default_settings.update(self.default_overwrite)
 

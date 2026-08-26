@@ -26,9 +26,11 @@ RUN_DEFAULT_KEYS = [
 
 POST_SUMMARY_DEFAULT_KEYS = [
     "timeseries_suffix",
-    "save_json_path",
+    "all_runs_summary_path",
     "stats_start_index",
     "stats_end_index",
     "pets",
     "model_component",
+    "include_combined",
+    "include_per_output",
 ]
