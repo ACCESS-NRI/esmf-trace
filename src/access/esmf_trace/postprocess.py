@@ -108,6 +108,36 @@ def _collect_case_jsons(
     return jsons
 
 
+def _warn_unmatched_components(df: pd.DataFrame, requested: set[str], max_listed: int = 2) -> None:
+    """
+    Warn about requested model_component selectors that match nothing here.
+
+    Post-summary can only select from what the timeseries JSONs already
+    contain - a component the upstream run-from-yaml step never captured is
+    simply absent and silently yields no rows.
+
+    max_listed caps how many selectors are named before the rest are
+    summarised as a count; full ESMF selectors are long enough that listing
+    every one buries the message.
+    """
+    if df.empty or "model_component" not in df.columns:
+        return
+
+    available = set(df["model_component"].astype(str).str.strip())
+    missing = sorted(requested - available)
+    if not missing:
+        return
+
+    case = df["__case_name"].iloc[0] if "__case_name" in df.columns else "?"
+    shown = ", ".join(missing[:max_listed])
+    if len(missing) > max_listed:
+        shown += f" (+{len(missing) - max_listed} more)"
+    print(
+        f"-- warning: {len(missing)} of {len(requested)} requested model_component(s) "
+        f"matched no rows in {case}: {shown}"
+    )
+
+
 def _summarise_case(
     json_paths: list[Path],
     model_component: list[str] | None,
@@ -166,6 +196,7 @@ def _summarise_case(
     ts = df
     if model_component is not None:
         sel = {s.strip() for s in model_component}
+        _warn_unmatched_components(df, sel)
         ts = ts[ts["model_component"].astype(str).str.strip().isin(sel)]
     if pets is not None:
         allowed = {int(p) for p in pets}

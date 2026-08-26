@@ -427,6 +427,53 @@ class TestPostSummaryFromYaml:
         assert "warning: case dir not found" in capsys.readouterr().out
 
 
+class TestUnmatchedComponentWarning:
+    """
+    Post-summary can only select components the upstream run already
+    captured. Asking for 24 and getting 1 used to look exactly like a config
+    that worked.
+    """
+
+    def _run(self, tmp_path, requested):
+        p0 = _write_case_output(tmp_path, "case_a", 0, [_row("OCN", 0, 1.0), _row("MED-TO-OCN", 0, 2.0)])
+        return _summarise_case(
+            json_paths=[p0],
+            model_component=requested,
+            pets=None,
+            stats_start_index=None,
+            stats_end_index=None,
+        )
+
+    def test_warns_when_a_requested_component_is_absent(self, tmp_path, capsys):
+        self._run(tmp_path, ["OCN", "ATM", "ICE"])
+        out = capsys.readouterr().out
+        assert "2 of 3 requested model_component(s) matched no rows" in out
+        assert "ATM" in out and "ICE" in out
+
+    def test_names_the_case(self, tmp_path, capsys):
+        self._run(tmp_path, ["ATM"])
+        assert "case_a" in capsys.readouterr().out
+
+    def test_silent_when_everything_matches(self, tmp_path, capsys):
+        self._run(tmp_path, ["OCN", "MED-TO-OCN"])
+        assert "matched no rows" not in capsys.readouterr().out
+
+    def test_silent_when_no_filter_requested(self, tmp_path, capsys):
+        self._run(tmp_path, None)
+        assert "matched no rows" not in capsys.readouterr().out
+
+    def test_long_lists_are_truncated_with_a_count(self, tmp_path, capsys):
+        self._run(tmp_path, ["OCN", "a", "b", "c", "d", "e"])
+        out = capsys.readouterr().out
+        assert "5 of 6 requested" in out
+        assert "(+2 more)" in out  # 5 missing, 3 listed
+
+    def test_warning_does_not_change_the_result(self, tmp_path, capsys):
+        summary = self._run(tmp_path, ["OCN", "ATM"])
+        capsys.readouterr()
+        assert set(summary["model_component"].unique()) == {"OCN"}
+
+
 class TestToPublicTable:
     def test_renames_internal_columns(self):
         df = pd.DataFrame(
