@@ -5,10 +5,12 @@ import pytest
 
 from access.esmf_trace.config import PostRunSettings, PostSummarySettings
 from access.esmf_trace.postprocess import (
+    PUBLIC_COLUMNS,
     _resolve_save_json_path,
     _select_summary_rows,
     _slice_per_series_iloc,
     _summarise_case,
+    _to_public_table,
     post_summary_from_yaml,
 )
 
@@ -248,17 +250,15 @@ class TestPostSummaryFromYaml:
         _write_case_output(tmp_path, "case_a", 0, [_row("A", 0, 1.0)])
         defaults, runs = self._settings(tmp_path)
         out = post_summary_from_yaml(defaults, runs)
-        assert list(out.columns) == [
-            "ncpus",
-            "hits",
-            "tmin",
-            "tmax",
-            "tavg",
-            "tmedian",
-            "tstd",
-            "pemin",
-            "pemax",
-        ]
+        assert out.index.name == "name"
+        assert list(out.columns) == PUBLIC_COLUMNS[1:]
+
+    def test_returned_table_exposes_no_internal_columns(self, tmp_path):
+        _write_case_output(tmp_path, "case_a", 0, [_row("A", 0, 1.0)])
+        defaults, runs = self._settings(tmp_path)
+        out = post_summary_from_yaml(defaults, runs)
+        assert not [c for c in out.columns if c.startswith("__")]
+        assert not out.index.name.startswith("__")
 
     def test_ncpus_reaches_the_combined_table(self, tmp_path):
         # the pooled 'combine' row spans two PETs; without ncpus in the
@@ -323,7 +323,7 @@ class TestPostSummaryFromYaml:
         post_summary_from_yaml(defaults, runs, include_combined=True, include_per_output=False)
         assert run_save.is_file()
         saved = json.loads(run_save.read_text())
-        assert all(r["__output_name"] == "combine" for r in saved)
+        assert all(r["output_name"] == "combine" for r in saved)
 
     def test_missing_case_directory_is_skipped_not_fatal(self, tmp_path, capsys):
         _write_case_output(tmp_path, "case_a", 0, [_row("A", 0, 1.0)])
@@ -332,3 +332,86 @@ class TestPostSummaryFromYaml:
         out = post_summary_from_yaml(defaults, runs)
         assert not out.empty
         assert "warning: case dir not found" in capsys.readouterr().out
+
+
+class TestToPublicTable:
+    def test_renames_internal_columns(self):
+        df = pd.DataFrame(
+            {
+                "__row_label": ["case_a/output000/A"],
+                "__case_name": ["case_a"],
+                "__output_name": ["output000"],
+                "model_component": ["A"],
+                "hits": [2],
+            }
+        )
+        out = _to_public_table(df)
+        assert list(out.columns) == ["name", "case_name", "output_name", "model_component", "hits"]
+
+    def test_drops_columns_outside_the_public_schema(self):
+        df = pd.DataFrame({"__row_label": ["x"], "__src_path": ["/tmp/x.json"], "hits": [1]})
+        out = _to_public_table(df)
+        assert "__src_path" not in out.columns
+
+    def test_orders_columns_as_public_columns(self):
+        df = pd.DataFrame(
+            {c: [0] for c in ["pemax", "hits", "__row_label", "ncpus", "model_component"]},
+        )
+        out = _to_public_table(df)
+        assert list(out.columns) == ["name", "model_component", "ncpus", "hits", "pemax"]
+
+
+class TestOutputSchemaParity:
+    """
+    The per-run JSON used to expose raw '__row_label'/'__case_name'/
+    '__output_name' keys while the combined JSON used 'name' and dropped
+    model_component, so one command produced two differently shaped files.
+    """
+
+    def _run(self, tmp_path):
+        _write_case_output(tmp_path, "case_a", 0, [_row("A", 0, 1.0), _row("A", 0, 3.0)])
+        _write_case_output(tmp_path, "case_a", 1, [_row("A", 1, 5.0), _row("A", 1, 7.0)])
+        run_save = tmp_path / "per_run.json"
+        combined_save = tmp_path / "combined.json"
+        defaults = PostSummarySettings(post_base_path=tmp_path)
+        runs = [PostRunSettings(name="case_a", save_json_path=run_save)]
+        table = post_summary_from_yaml(defaults, runs, save_json_path=combined_save)
+        return json.loads(run_save.read_text()), json.loads(combined_save.read_text()), table
+
+    def test_both_json_files_share_one_schema(self, tmp_path):
+        per_run, combined, _ = self._run(tmp_path)
+        assert sorted(per_run[0].keys()) == sorted(combined[0].keys())
+
+    def test_neither_file_leaks_internal_columns(self, tmp_path):
+        per_run, combined, _ = self._run(tmp_path)
+        for rows in (per_run, combined):
+            assert not [k for k in rows[0] if k.startswith("__")]
+
+    def test_both_files_carry_the_public_columns(self, tmp_path):
+        per_run, combined, _ = self._run(tmp_path)
+        for rows in (per_run, combined):
+            assert sorted(rows[0].keys()) == sorted(PUBLIC_COLUMNS)
+
+    def test_model_component_survives_into_the_combined_file(self, tmp_path):
+        _, combined, _ = self._run(tmp_path)
+        assert all(row["model_component"] == "A" for row in combined)
+
+    def test_returned_table_matches_the_file_schema(self, tmp_path):
+        _, combined, table = self._run(tmp_path)
+        assert sorted([table.index.name, *table.columns]) == sorted(combined[0].keys())
+
+    def test_parquet_matches_the_file_schema(self, tmp_path):
+        _, combined, _ = self._run(tmp_path)
+        parquet = pd.read_parquet(tmp_path / "combined_table.parquet")
+        assert sorted([parquet.index.name, *parquet.columns]) == sorted(combined[0].keys())
+
+    def test_printed_table_is_narrowed_but_files_are_not(self, tmp_path, capsys):
+        _, combined, _ = self._run(tmp_path)
+        printed = capsys.readouterr().out
+        # the long, repeated columns are omitted from the terminal view only;
+        # pandas may still elide middle columns, so check the outer ones.
+        assert "model_component" not in printed
+        assert "case_name" not in printed
+        assert "ncpus" in printed
+        assert "pemax" in printed
+        assert all("model_component" in row for row in combined)

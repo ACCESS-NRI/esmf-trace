@@ -248,6 +248,51 @@ def _resolve_save_json_path(save_json_path: str | Path | None) -> Path | None:
     return p
 
 
+# Internal bookkeeping columns are '__'-prefixed; these are their public
+# names. Everything written to disk or handed back to a caller goes through
+# _to_public_table, so the per-run and combined outputs share one schema.
+_PUBLIC_RENAMES = {
+    "__row_label": "name",
+    "__case_name": "case_name",
+    "__output_name": "output_name",
+}
+
+PUBLIC_COLUMNS = [
+    "name",
+    "case_name",
+    "output_name",
+    "model_component",
+    "ncpus",
+    "hits",
+    "tmin",
+    "tmax",
+    "tavg",
+    "tmedian",
+    "tstd",
+    "pemin",
+    "pemax",
+]
+
+# Printed to the terminal. Narrower than PUBLIC_COLUMNS because case_name,
+# output_name and model_component are all repeated in the row label, and
+# real ESMF component selectors are far too long to tabulate.
+DISPLAY_COLUMNS = ["ncpus", "hits", "tmin", "tmax", "tavg", "tmedian", "tstd", "pemin", "pemax"]
+
+
+def _to_public_table(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Rename the internal '__'-prefixed columns to their public names and order
+    them as PUBLIC_COLUMNS.
+
+    Both the per-run and the combined output are written from this, so the
+    two files always share a schema; previously the per-run JSON exposed raw
+    '__row_label'/'__case_name'/'__output_name' keys while the combined one
+    used 'name' and dropped model_component entirely.
+    """
+    renamed = df.rename(columns=_PUBLIC_RENAMES)
+    return renamed.loc[:, [c for c in PUBLIC_COLUMNS if c in renamed.columns]]
+
+
 def _select_summary_rows(
     summary: pd.DataFrame,
     *,
@@ -300,8 +345,10 @@ def post_summary_from_yaml(
 
     For each run: collects its timeseries JSONs, summarises them, filters to
     the requested row kinds, optionally writes that run's own selection to
-    its `save_json_path`, then folds it into the combined table. Prints the
-    combined table before returning it.
+    its `save_json_path`, then folds it into the combined table. Prints a
+    narrowed view of the combined table (DISPLAY_COLUMNS) before returning
+    the full one; per-run and combined output share the PUBLIC_COLUMNS
+    schema.
 
     Raises ValueError if both include flags resolve to false, or if no run
     produced any rows (e.g. every case directory was missing or every row
@@ -309,7 +356,7 @@ def post_summary_from_yaml(
     function as well as from the CLI.
 
     Returns the combined table as a DataFrame indexed by row label ("name"),
-    with columns ncpus/hits/tmin/tmax/tavg/tmedian/tstd/pemin/pemax.
+    carrying the remaining PUBLIC_COLUMNS.
     """
     post_base_path: Path = Path(defaults.post_base_path)
     timeseries_suffix: str = defaults.timeseries_suffix
@@ -351,9 +398,9 @@ def post_summary_from_yaml(
         per_run_save = _resolve_save_json_path(r.save_json_path) if r.save_json_path is not None else None
         if per_run_save is not None:
             (
-                selected_case_summary.reset_index(drop=True).to_json(  # ensure a clean row index
-                    per_run_save, orient="records", indent=2
-                )
+                _to_public_table(selected_case_summary)
+                .reset_index(drop=True)  # ensure a clean row index
+                .to_json(per_run_save, orient="records", indent=2)
             )
             print(f"-- saved per-run summary JSON: {per_run_save}")
 
@@ -363,24 +410,17 @@ def post_summary_from_yaml(
         raise ValueError("No rows produced. Check config selections and filters.")
 
     # Build combined table across all selected runs
-    combined_df = pd.concat(per_case_tables, ignore_index=True)
-
-    # ncpus is the distinct-PET count behind each row, so it belongs in the
-    # combined output too - without it a pooled 'combine' row can't be told
-    # apart from a single-output row. Ordered as in _summarise_case.
-    wanted_cols = ["__row_label", "ncpus", "hits", "tmin", "tmax", "tavg", "tmedian", "tstd", "pemin", "pemax"]
-    combined_df = combined_df.loc[:, [c for c in wanted_cols if c in combined_df.columns]]
-
-    clean_df = combined_df.rename(columns={"__row_label": "name"}).set_index("name")
+    combined_df = _to_public_table(pd.concat(per_case_tables, ignore_index=True))
+    clean_df = combined_df.set_index("name")
 
     print("\n")
     print("-- Summary table:")
-    print(clean_df)
+    print(clean_df.loc[:, [c for c in DISPLAY_COLUMNS if c in clean_df.columns]])
 
     combined_out = _resolve_save_json_path(save_json_path or defaults.save_json_path)
 
     if combined_out is not None:
-        (combined_df.rename(columns={"__row_label": "name"}).to_json(combined_out, orient="records", indent=2))
+        combined_df.to_json(combined_out, orient="records", indent=2)
         print("\n")
         print(f"-- saved combined summary json: {combined_out}")
 
