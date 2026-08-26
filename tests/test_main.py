@@ -39,16 +39,16 @@ class TestPostSummaryCli:
         assert overrides["include_per_output"] is True
         assert overrides["stats_start_index"] == 2
         assert "include_combined" not in overrides
-        assert "save_json_path" not in overrides
+        assert "all_runs_summary_path" not in overrides
 
-    def test_apply_overrides_converts_save_json_path_to_str(self, tmp_path):
+    def test_apply_overrides_converts_all_runs_summary_path_to_str(self, tmp_path):
         target = tmp_path / "out.json"
         ns = self._parse(
-            ["post-summary-from-yaml", "--config", str(tmp_path / "c.yaml"), "--save-json-path", str(target)]
+            ["post-summary-from-yaml", "--config", str(tmp_path / "c.yaml"), "--all-runs-summary-path", str(target)]
         )
         overrides = _apply_post_summary_overrides(ns)
-        assert overrides["save_json_path"] == str(target)
-        assert isinstance(overrides["save_json_path"], str)
+        assert overrides["all_runs_summary_path"] == str(target)
+        assert isinstance(overrides["all_runs_summary_path"], str)
 
 
 class TestRunCli:

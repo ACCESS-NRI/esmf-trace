@@ -236,20 +236,21 @@ def _summarise_case(
     return pd.concat([per_output[output_cols], combined_by_comp[output_cols]], ignore_index=True)
 
 
-def _resolve_save_json_path(save_json_path: str | Path | None) -> Path | None:
+def _prepare_summary_path(summary_path: str | Path | None) -> Path | None:
     """
-    Validate a save path and ensure its parent directory exists.
+    Validate a summary destination and ensure its parent directory exists.
 
-    Returns None unchanged if save_json_path is None (meaning "don't save").
-    Otherwise expands the path, requires a ".json" suffix (raising
-    ValueError if it doesn't have one), creates the parent directory if
-    needed, and returns the resolved Path.
+    Returns None unchanged if summary_path is None (meaning "don't save"),
+    so callers can pass an unset path straight through. Otherwise expands
+    the path, requires a ".json" suffix (raising ValueError if it doesn't
+    have one), creates the parent directory if needed, and returns the
+    resolved Path.
     """
-    if save_json_path is None:
+    if summary_path is None:
         return None
-    p = Path(save_json_path).expanduser()
+    p = Path(summary_path).expanduser()
     if p.suffix.lower() != ".json":
-        raise ValueError(f"Invalid save_json_path: {p} — must explicitly end with '.json'!")
+        raise ValueError(f"Invalid summary path: {p} — must explicitly end with '.json'!")
     p.parent.mkdir(parents=True, exist_ok=True)
     return p
 
@@ -331,7 +332,7 @@ def _select_summary_rows(
 def post_summary_from_yaml(
     defaults: PostSummarySettings,
     runs: list[PostRunSettings],
-    save_json_path: str | Path | None = None,
+    all_runs_summary_path: str | Path | None = None,
     include_combined: bool | None = None,
     include_per_output: bool | None = None,
 ) -> pd.DataFrame:
@@ -342,16 +343,17 @@ def post_summary_from_yaml(
 
     defaults, runs: as produced by config.parse_post_summary_config() /
         config.load_post_summary_config().
-    save_json_path: if given, overrides defaults.save_json_path as the
-        destination for the combined summary. Writing it also writes a
-        sibling "<stem>_table.parquet" of the cleaned, indexed table.
+    all_runs_summary_path: if given, overrides defaults.all_runs_summary_path
+        as the destination for the combined summary. Must end in ".json";
+        writing it also writes a sibling "<stem>_table.parquet" of the
+        cleaned, indexed table.
     include_combined, include_per_output: override defaults.include_combined
         / defaults.include_per_output for this call; None keeps the
         default's value. At least one must end up true.
 
     For each run: collects its timeseries JSONs, summarises them, filters to
     the requested row kinds, optionally writes that run's own selection to
-    its `save_json_path`, then folds it into the combined table. Prints a
+    its `summary_path`, then folds it into the combined table. Prints a
     narrowed view of the combined table (DISPLAY_COLUMNS) before returning
     the full one; per-run and combined output share the PUBLIC_COLUMNS
     schema.
@@ -400,9 +402,9 @@ def post_summary_from_yaml(
             include_per_output=include_per_output,
         )
 
-        # Save per-run json if this run specified a save path (strict .json);
-        # _resolve_save_json_path returns None when the run didn't set one.
-        per_run_save = _resolve_save_json_path(r.save_json_path)
+        # Save per-run json if this run specified a path (strict .json);
+        # _prepare_summary_path returns None when the run didn't set one.
+        per_run_save = _prepare_summary_path(r.summary_path)
         if per_run_save is not None:
             (
                 _to_public_table(selected_case_summary)
@@ -424,7 +426,7 @@ def post_summary_from_yaml(
     print("-- Summary table:")
     print(clean_df.loc[:, [c for c in DISPLAY_COLUMNS if c in clean_df.columns]])
 
-    combined_out = _resolve_save_json_path(save_json_path or defaults.save_json_path)
+    combined_out = _prepare_summary_path(all_runs_summary_path or defaults.all_runs_summary_path)
 
     if combined_out is not None:
         combined_df.to_json(combined_out, orient="records", indent=2)

@@ -124,7 +124,7 @@ class TestUnknownKeyRejection:
             stats_start_index=1,
             stats_end_index=5,
             timeseries_suffix="_ts.json",
-            save_json_path=str(tmp_path / "out.json"),
+            all_runs_summary_path=str(tmp_path / "out.json"),
             include_combined=True,
             include_per_output=True,
         )
@@ -136,7 +136,7 @@ class TestUnknownKeyRejection:
                 "pets": [0],
                 "stats_start_index": 1,
                 "stats_end_index": 5,
-                "save_json_path": str(tmp_path / "run.json"),
+                "summary_path": str(tmp_path / "run.json"),
             }
         ]
         defaults, runs = parse_post_summary_config(data)
@@ -207,19 +207,19 @@ class TestParsePostSummaryConfigPerRunInheritance:
         _, runs = parse_post_summary_config(_base_post_summary_data())
         assert runs[0].output_index is None
 
-    def test_per_run_save_json_path_does_not_inherit_default(self, tmp_path):
+    def test_per_run_summary_path_does_not_inherit_default(self, tmp_path):
         save_path = tmp_path / "combined.json"
-        data = _base_post_summary_data(save_json_path=str(save_path))
+        data = _base_post_summary_data(all_runs_summary_path=str(save_path))
         data["runs"] = [{"name": "case_a"}]
         _, runs = parse_post_summary_config(data)
-        assert runs[0].save_json_path is None
+        assert runs[0].summary_path is None
 
-    def test_per_run_save_json_path_honoured_when_declared_on_the_run(self, tmp_path):
+    def test_per_run_summary_path_honoured_when_declared_on_the_run(self, tmp_path):
         run_save_path = tmp_path / "per_run.json"
         data = _base_post_summary_data()
-        data["runs"] = [{"name": "case_a", "save_json_path": str(run_save_path)}]
+        data["runs"] = [{"name": "case_a", "summary_path": str(run_save_path)}]
         _, runs = parse_post_summary_config(data)
-        assert runs[0].save_json_path == run_save_path
+        assert runs[0].summary_path == run_save_path
 
 
 class TestLoadPostSummaryConfig:

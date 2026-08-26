@@ -97,7 +97,7 @@ class TestACCESSPostSummaryConfigBuilder:
             pets="0,3",
             stats_start_index=1,
             stats_end_index=5,
-            save_json_path="/out/combined.json",
+            all_runs_summary_path="/out/combined.json",
             include_combined=False,
         )
         config = builder.build_config([{"name": "case_a"}])
@@ -106,7 +106,7 @@ class TestACCESSPostSummaryConfigBuilder:
         assert ds["pets"] == ["0", "3"]
         assert ds["stats_start_index"] == 1
         assert ds["stats_end_index"] == 5
-        assert ds["save_json_path"] == "/out/combined.json"
+        assert ds["all_runs_summary_path"] == "/out/combined.json"
         assert ds["include_combined"] is False
         assert ds["include_per_output"] is True
         assert config["runs"] == [{"name": "case_a"}]
@@ -128,14 +128,14 @@ class TestPostSummaryFromConfigWiring:
         out = post_summary_from_config(config, post_overrides={"stats_start_index": None})
         assert not out.empty
 
-    def test_save_json_path_argument_writes_combined_output(self, tmp_path):
+    def test_all_runs_summary_path_argument_writes_output(self, tmp_path):
         _write_output(tmp_path, "case_a", 0, [_row("A", 0, 1.0)])
         config = {
             "default_settings": {"post_base_path": str(tmp_path)},
             "runs": [{"name": "case_a"}],
         }
         save_path = tmp_path / "combined.json"
-        post_summary_from_config(config, save_json_path=save_path)
+        post_summary_from_config(config, all_runs_summary_path=save_path)
         assert save_path.is_file()
 
 

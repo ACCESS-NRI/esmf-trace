@@ -34,7 +34,7 @@ def run_from_config(
 def post_summary_from_config(
     config_path: str | Path | dict,
     post_overrides: dict | None = None,
-    save_json_path: str | Path | None = None,
+    all_runs_summary_path: str | Path | None = None,
     include_combined: bool | None = None,
     include_per_output: bool | None = None,
 ):
@@ -46,8 +46,9 @@ def post_summary_from_config(
         applied to every run (not just where a run itself left the field
         unset) - e.g. {"timeseries_suffix": "_timeseries.json",
         "stats_start_index": 1}. Unrecognised keys raise ConfigError.
-    save_json_path: where to write the combined summary JSON (and a sibling
-        parquet table); overrides the config's own save_json_path if given.
+    all_runs_summary_path: where to write the summary table spanning every
+        run. Must end in ".json"; a sibling "<stem>_table.parquet" is
+        written alongside it. Overrides the config's own value if given.
     include_combined: include the rows pooled across selected outputs.
     include_per_output: include one row per selected output.
 
@@ -59,7 +60,7 @@ def post_summary_from_config(
     return post_summary_from_yaml(
         defaults,
         runs,
-        save_json_path=save_json_path,
+        all_runs_summary_path=all_runs_summary_path,
         include_combined=include_combined,
         include_per_output=include_per_output,
     )
@@ -236,7 +237,7 @@ class ACCESSPostSummaryConfigBuilder:
         pets: str | list[int] | None = None,
         stats_start_index: int | None = None,
         stats_end_index: int | None = None,
-        save_json_path: str | Path | None = None,
+        all_runs_summary_path: str | Path | None = None,
         timeseries_suffix: str = "_timeseries.json",
         include_combined: bool = True,
         include_per_output: bool = True,
@@ -246,11 +247,13 @@ class ACCESSPostSummaryConfigBuilder:
         Initialise a builder for esmf-trace post-summary configuration for ACCESS-style workflows.
 
         post_base_path: root directory containing one subdirectory per case name.
-        model_component, pets, stats_start_index, stats_end_index, save_json_path,
-            timeseries_suffix: become the corresponding default_settings entries
-            in the built config (see build_config()); each is applied to every
-            run unless a run dict overrides it directly (save_json_path is the
-            exception - it is never inherited per-run, see PostRunSettings).
+        model_component, pets, stats_start_index, stats_end_index,
+            all_runs_summary_path, timeseries_suffix: become the corresponding
+            default_settings entries in the built config (see build_config());
+            each is applied to every run unless a run dict overrides it
+            directly. all_runs_summary_path is the exception - it is the
+            across-all-runs destination and has no per-run counterpart to
+            inherit; a run opts in separately via its own summary_path.
         include_combined: include the pooled-across-outputs "combine" row.
         include_per_output: include one row per output. At least one of
             include_combined/include_per_output must be true.
@@ -267,7 +270,7 @@ class ACCESSPostSummaryConfigBuilder:
         self.stats_start_index = stats_start_index
         self.stats_end_index = stats_end_index
         self.timeseries_suffix = timeseries_suffix
-        self.save_json_path = Path(save_json_path) if save_json_path is not None else None
+        self.all_runs_summary_path = Path(all_runs_summary_path) if all_runs_summary_path is not None else None
         self.include_combined = include_combined
         self.include_per_output = include_per_output
         self.default_overwrite = default_overwrite if default_overwrite is not None else {}
@@ -293,7 +296,8 @@ class ACCESSPostSummaryConfigBuilder:
             - output_index: "1,3-5,6" or [1,3,4,5,6]
             - stats_start_index: int
             - stats_end_index: int
-            - save_json_path: str or Path, must end with .json
+            - summary_path: str or Path, must end with .json; writes this
+              run's own rows, separate from all_runs_summary_path
 
         The default_settings block always carries include_combined and
         include_per_output (from the constructor args), in addition to
@@ -323,8 +327,8 @@ class ACCESSPostSummaryConfigBuilder:
             default_settings["stats_start_index"] = self.stats_start_index
         if self.stats_end_index is not None:
             default_settings["stats_end_index"] = self.stats_end_index
-        if self.save_json_path is not None:
-            default_settings["save_json_path"] = str(self.save_json_path)
+        if self.all_runs_summary_path is not None:
+            default_settings["all_runs_summary_path"] = str(self.all_runs_summary_path)
 
         default_settings.update(self.default_overwrite)
 

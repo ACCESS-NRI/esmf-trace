@@ -7,7 +7,7 @@ import pytest
 from access.esmf_trace.config import PostRunSettings, PostSummarySettings
 from access.esmf_trace.postprocess import (
     PUBLIC_COLUMNS,
-    _resolve_save_json_path,
+    _prepare_summary_path,
     _select_summary_rows,
     _slice_per_series_iloc,
     _summarise_case,
@@ -129,24 +129,24 @@ class TestSelectSummaryRows:
             _select_summary_rows(self._summary(), include_combined=False, include_per_output=False)
 
 
-class TestResolveSaveJsonPath:
+class TestPrepareSummaryPath:
     def test_none_returns_none(self):
         # callers rely on this instead of guarding at the call site
-        assert _resolve_save_json_path(None) is None
+        assert _prepare_summary_path(None) is None
 
     def test_none_does_not_touch_the_filesystem(self, monkeypatch):
         called = []
         monkeypatch.setattr(Path, "mkdir", lambda self, *a, **kw: called.append(self))
-        assert _resolve_save_json_path(None) is None
+        assert _prepare_summary_path(None) is None
         assert called == []
 
     def test_non_json_suffix_raises(self, tmp_path):
         with pytest.raises(ValueError, match="must explicitly end with"):
-            _resolve_save_json_path(tmp_path / "out.txt")
+            _prepare_summary_path(tmp_path / "out.txt")
 
     def test_creates_parent_directory(self, tmp_path):
         target = tmp_path / "nested" / "out.json"
-        resolved = _resolve_save_json_path(target)
+        resolved = _prepare_summary_path(target)
         assert resolved == target
         assert target.parent.is_dir()
 
@@ -347,7 +347,7 @@ class TestPostSummaryFromYaml:
         _write_case_output(tmp_path, "case_a", 1, [_row("A", 1, 5.0)])
         defaults, runs = self._settings(tmp_path)
         save_path = tmp_path / "out" / "combined.json"
-        post_summary_from_yaml(defaults, runs, save_json_path=save_path)
+        post_summary_from_yaml(defaults, runs, all_runs_summary_path=save_path)
 
         saved = json.loads(save_path.read_text())
         assert all("ncpus" in row for row in saved)
@@ -381,24 +381,24 @@ class TestPostSummaryFromYaml:
         _write_case_output(tmp_path, "case_a", 0, [_row("A", 0, 1.0), _row("A", 0, 3.0)])
         defaults, runs = self._settings(tmp_path)
         save_path = tmp_path / "out" / "combined.json"
-        post_summary_from_yaml(defaults, runs, save_json_path=save_path)
+        post_summary_from_yaml(defaults, runs, all_runs_summary_path=save_path)
         assert save_path.is_file()
         assert (tmp_path / "out" / "combined_table.parquet").is_file()
 
-    def test_per_run_save_json_path_writes_only_selected_rows(self, tmp_path):
+    def test_per_run_summary_path_writes_only_selected_rows(self, tmp_path):
         _write_case_output(tmp_path, "case_a", 0, [_row("A", 0, 1.0), _row("A", 0, 3.0)])
         run_save = tmp_path / "per_run.json"
         defaults = PostSummarySettings(post_base_path=tmp_path)
-        runs = [PostRunSettings(name="case_a", save_json_path=run_save)]
+        runs = [PostRunSettings(name="case_a", summary_path=run_save)]
         post_summary_from_yaml(defaults, runs, include_combined=True, include_per_output=False)
         assert run_save.is_file()
         saved = json.loads(run_save.read_text())
         assert all(r["output_name"] == "combine" for r in saved)
 
-    def test_run_without_save_json_path_writes_nothing(self, tmp_path, capsys):
+    def test_run_without_summary_path_writes_nothing(self, tmp_path, capsys):
         _write_case_output(tmp_path, "case_a", 0, [_row("A", 0, 1.0)])
         defaults = PostSummarySettings(post_base_path=tmp_path)
-        runs = [PostRunSettings(name="case_a")]  # no save_json_path
+        runs = [PostRunSettings(name="case_a")]  # no summary_path
         post_summary_from_yaml(defaults, runs)
         assert "saved per-run summary JSON" not in capsys.readouterr().out
         assert not list(tmp_path.glob("*.json"))
@@ -410,7 +410,7 @@ class TestPostSummaryFromYaml:
         defaults = PostSummarySettings(post_base_path=tmp_path)
         runs = [
             PostRunSettings(name="case_a"),
-            PostRunSettings(name="case_b", save_json_path=run_save),
+            PostRunSettings(name="case_b", summary_path=run_save),
         ]
         post_summary_from_yaml(defaults, runs)
         assert run_save.is_file()
@@ -467,8 +467,8 @@ class TestOutputSchemaParity:
         run_save = tmp_path / "per_run.json"
         combined_save = tmp_path / "combined.json"
         defaults = PostSummarySettings(post_base_path=tmp_path)
-        runs = [PostRunSettings(name="case_a", save_json_path=run_save)]
-        table = post_summary_from_yaml(defaults, runs, save_json_path=combined_save)
+        runs = [PostRunSettings(name="case_a", summary_path=run_save)]
+        table = post_summary_from_yaml(defaults, runs, all_runs_summary_path=combined_save)
         return json.loads(run_save.read_text()), json.loads(combined_save.read_text()), table
 
     def test_both_json_files_share_one_schema(self, tmp_path):

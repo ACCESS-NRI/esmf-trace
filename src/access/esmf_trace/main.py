@@ -104,7 +104,11 @@ def _add_post_summary_overrides(parser: argparse.ArgumentParser) -> None:
     arg.add_argument(
         "--timeseries-suffix", type=str, help="Timeseries filename suffix to match (e.g., _timeseries.json)."
     )
-    arg.add_argument("--save-json-path", type=Path, help="Save combined summary JSON to this path.")
+    arg.add_argument(
+        "--all-runs-summary-path",
+        type=Path,
+        help="Write the summary spanning every run to this path (.json; a sibling parquet is written too).",
+    )
     arg.add_argument(
         "--include-combined",
         action=argparse.BooleanOptionalAction,
@@ -135,7 +139,7 @@ def _apply_post_summary_overrides(ns: argparse.Namespace) -> dict:
     for f in POST_SUMMARY_DEFAULT_KEYS:
         v = getattr(ns, f, None)
         if v is not None:
-            if f == "save_json_path" and isinstance(v, Path):
+            if f == "all_runs_summary_path" and isinstance(v, Path):
                 v = str(v)
             overrides[f] = v
 
@@ -211,7 +215,7 @@ def cli_post_summary_from_yaml(
     post_summary_from_config(
         ns.config,
         post_overrides=_apply_post_summary_overrides(ns),
-        save_json_path=ns.save_json_path,
+        all_runs_summary_path=ns.all_runs_summary_path,
     )
 
 

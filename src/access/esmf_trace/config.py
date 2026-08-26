@@ -105,10 +105,13 @@ class PostSummarySettings:
         both means no slicing.
     timeseries_suffix: filename suffix used to find timeseries JSON files
         under each output directory (e.g. "_timeseries.json").
-    save_json_path: where to write the combined summary across all runs;
-        None means don't save.
+    all_runs_summary_path: where to write the summary table spanning every
+        run. Must end in ".json"; a sibling "<stem>_table.parquet" is
+        written alongside it. None means don't save.
     include_combined: include the pooled-across-outputs "combine" row per
-        (case, component).
+        (case, component). Note this is a different axis from
+        all_runs_summary_path: "combined" here means pooled across the
+        outputs of one case, not across runs.
     include_per_output: include one row per (case, output, component).
         At least one of include_combined/include_per_output must be true.
     """
@@ -119,7 +122,7 @@ class PostSummarySettings:
     stats_start_index: int | None = None
     stats_end_index: int | None = None
     timeseries_suffix: str = "_timeseries.json"
-    save_json_path: Path | None = None
+    all_runs_summary_path: Path | None = None
     include_combined: bool = True
     include_per_output: bool = True
 
@@ -129,14 +132,15 @@ class PostRunSettings:
     """
     Settings for a single case/run within a post-summary config. Any field
     left unset (None) falls back to the corresponding PostSummarySettings
-    default, except save_json_path, which is opt-in per run and never
-    inherits the shared default (that default is reserved for the combined
-    table across all runs).
+    default, except summary_path, which is opt-in per run and has no default
+    to inherit - the config-wide all_runs_summary_path is a different
+    destination, holding the table combined across all runs.
 
     name: case name; must match a subdirectory under post_base_path.
     output_index: which outputNNN directories to include; None means all.
-    save_json_path: if set, write this run's own summary rows to this path
-        (in addition to it contributing to the combined table).
+    summary_path: if set, write this run's own summary rows to this path
+        (in addition to it contributing to the combined table). Must end in
+        ".json".
     """
 
     name: str
@@ -145,7 +149,7 @@ class PostRunSettings:
     pets: list[int] | None = None
     stats_start_index: int | None = None
     stats_end_index: int | None = None
-    save_json_path: Path | None = None
+    summary_path: Path | None = None
 
 
 def _as_mapping(x, what: str) -> dict:
@@ -276,7 +280,7 @@ def parse_post_summary_config(
         stats_start_index=_norm_int_or_none(configured_default.get("stats_start_index")),
         stats_end_index=_norm_int_or_none(configured_default.get("stats_end_index")),
         timeseries_suffix=configured_default.get("timeseries_suffix", "_timeseries.json"),
-        save_json_path=_norm_path_or_none(configured_default.get("save_json_path")),
+        all_runs_summary_path=_norm_path_or_none(configured_default.get("all_runs_summary_path")),
         include_combined=bool(configured_default.get("include_combined", True)),
         include_per_output=bool(configured_default.get("include_per_output", True)),
     )
@@ -315,9 +319,10 @@ def parse_post_summary_config(
                 pets=pets,
                 stats_start_index=_norm_int_or_none(selected(item, "stats_start_index", defaults.stats_start_index)),
                 stats_end_index=_norm_int_or_none(selected(item, "stats_end_index", defaults.stats_end_index)),
-                # The default save path is for the combined table. Per-run
-                # output is opt-in and must be declared on that run.
-                save_json_path=_norm_path_or_none(item.get("save_json_path")),
+                # all_runs_summary_path is a different destination (the table
+                # across all runs), so there is nothing to inherit here:
+                # per-run output is opt-in and must be declared on that run.
+                summary_path=_norm_path_or_none(item.get("summary_path")),
             )
         )
 
