@@ -68,6 +68,38 @@ class TestSlicePerSeriesIloc:
         assert out.empty
         assert out is not df
 
+    def _df_with_nan_keys(self):
+        return pd.DataFrame(
+            {
+                "case": ["a", "a", None, None],
+                "order": [0, 1, 0, 1],
+                "value": [10, 11, 20, 21],
+            }
+        )
+
+    def test_rows_with_a_nan_group_key_are_not_dropped(self):
+        # pandas' groupby default (dropna=True) would silently discard the
+        # two NaN-keyed rows, so enabling slicing would change which rows
+        # count, not just how many samples each series contributes.
+        out = _slice_per_series_iloc(self._df_with_nan_keys(), self.GROUP_COLS, self.ORDER_COLS, 0, 2)
+        assert sorted(out["value"].tolist()) == [10, 11, 20, 21]
+
+    def test_nan_keyed_rows_form_their_own_series(self):
+        out = _slice_per_series_iloc(self._df_with_nan_keys(), self.GROUP_COLS, self.ORDER_COLS, 0, 1)
+        # one row kept from the 'a' series and one from the NaN series
+        assert sorted(out["value"].tolist()) == [10, 20]
+
+    def test_slicing_preserves_row_count_when_slice_covers_everything(self):
+        df = self._df_with_nan_keys()
+        unsliced = _slice_per_series_iloc(df, self.GROUP_COLS, self.ORDER_COLS, None, None)
+        sliced = _slice_per_series_iloc(df, self.GROUP_COLS, self.ORDER_COLS, 0, None)
+        assert len(sliced) == len(unsliced) == 4
+
+    def test_all_nan_keys_still_slices(self):
+        df = pd.DataFrame({"case": [None, None], "order": [0, 1], "value": [1, 2]})
+        out = _slice_per_series_iloc(df, self.GROUP_COLS, self.ORDER_COLS, 0, 1)
+        assert out["value"].tolist() == [1]
+
 
 class TestSelectSummaryRows:
     def _summary(self):
@@ -206,6 +238,36 @@ class TestSummariseCaseCombinedStats:
         )
         assert summary.empty
         assert "__row_label" in summary.columns
+
+    def test_null_model_component_survives_slicing(self, tmp_path):
+        # _summarise_case aggregates with dropna=False, so the slicer must
+        # keep null-keyed rows too; otherwise turning on stats_start_index
+        # silently changes which rows are summarised.
+        rows = [
+            {"model_component": None, "pet": 0, "duration_s": 1.0, "start": 0},
+            {"model_component": None, "pet": 0, "duration_s": 3.0, "start": 1},
+            _row("A", 0, 5.0, start=0),
+            _row("A", 0, 7.0, start=1),
+        ]
+        p0 = _write_case_output(tmp_path, "case_nan", 0, rows)
+
+        unsliced = _summarise_case(
+            json_paths=[p0],
+            model_component=None,
+            pets=None,
+            stats_start_index=None,
+            stats_end_index=None,
+        )
+        sliced = _summarise_case(
+            json_paths=[p0],
+            model_component=None,
+            pets=None,
+            stats_start_index=0,
+            stats_end_index=2,
+        )
+        # the same set of components is summarised either way
+        assert set(sliced["model_component"].isna()) == set(unsliced["model_component"].isna())
+        assert sliced["hits"].sum() == unsliced["hits"].sum()
 
     def test_stats_slicing_restricts_pooled_samples(self, tmp_path):
         # 3 samples per (output, pet) series; keep only the first sample (iloc[0:1]) of each.

@@ -53,6 +53,12 @@ def _slice_per_series_iloc(
         the 1st row. If both are None, the frame is returned unchanged
         (no slicing, no copy).
 
+    Grouping uses dropna=False, matching every aggregation in
+    _summarise_case. With pandas' default (dropna=True) a row with a missing
+    group key - e.g. a null model_component - is dropped by the groupby, so
+    merely setting stats_start_index would silently change which rows are
+    counted rather than only how many samples each series contributes.
+
     Returns an empty frame (not an error) if df is empty, or if every group
     ends up empty after slicing.
     """
@@ -65,7 +71,7 @@ def _slice_per_series_iloc(
     sl = slice(start, end)
     groups = []
 
-    for _, g in df.groupby(group_cols, sort=False):
+    for _, g in df.groupby(group_cols, sort=False, dropna=False):
         g_sorted = g.sort_values(order_cols, kind="mergesort")
         groups.append(g_sorted.iloc[sl])
 
