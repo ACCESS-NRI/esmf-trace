@@ -88,7 +88,7 @@ Each entry in `runs` accepts:
 | `pets`, `model_component`, `stats_start_index`, `stats_end_index` | Same meaning as in `default_settings`; a run that sets its own value uses that instead of the default (see [override precedence](#override-precedence)). |
 | `summary_path` | Write **this run's own** summary rows to a separate `.json` file. |
 
-!!! note "The two destinations are deliberately different keys"
+!!! warning "The two destinations are deliberately different keys"
     `default_settings.all_runs_summary_path` and a run's `summary_path` are separate settings,
     not a default and its override. A run gets its own file only if it declares `summary_path`
     itself; there is nothing to inherit.
@@ -217,7 +217,7 @@ esmf-trace post-summary-from-yaml --config post_summary.yaml \
 | Flag | Notes |
 |---|---|
 | `--model-component NAME [NAME ...]` | Full component selector string(s). |
-| `--pets N [N ...]` | Plain integers, space separated: `--pets 0 13`. Each token is parsed as an `int`, so **any** comma or range form is rejected — `0,13`, `3-5` and `0,3-5` all fail with `invalid int value`. The comma/range syntax is YAML-only. |
+| `--pets N [N ...]` | Plain integers, space separated: `--pets 0 13`. Each token is parsed as an `int`, so **any** comma or range form is rejected — `0,13`, `3-5` and `0,3-5` all fail with `invalid int value`. The comma/range syntax is YAML-only ([default_settings reference](#default_settings-reference)). |
 | `--stats-start-index`, `--stats-end-index` | Integers, same slicing semantics as the YAML fields. |
 | `--timeseries-suffix` | Overrides the filename suffix to match. |
 | `--all-runs-summary-path PATH` | Must end in `.json`. Writes a sibling `parquet` too. |
