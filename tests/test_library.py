@@ -3,7 +3,7 @@ import re
 
 import pytest
 
-from access.esmf_trace.config import ConfigError
+from access.esmf_trace.config import ConfigError, parse_post_summary_config
 from access.esmf_trace.library import (
     ACCESSPostSummaryConfigBuilder,
     ACCESSRunConfigBuilder,
@@ -103,13 +103,40 @@ class TestACCESSPostSummaryConfigBuilder:
         config = builder.build_config([{"name": "case_a"}])
         ds = config["default_settings"]
         assert ds["model_component"] == ["a", "b"]
-        assert ds["pets"] == ["0", "3"]
+        assert ds["pets"] == [0, 3]
         assert ds["stats_start_index"] == 1
         assert ds["stats_end_index"] == 5
         assert ds["all_runs_summary_path"] == "/out/all_runs.json"
         assert ds["include_combined"] is False
         assert ds["include_per_output"] is True
         assert config["runs"] == [{"name": "case_a"}]
+
+    @pytest.mark.parametrize(
+        "pets, expected",
+        [
+            ("0,13", [0, 13]),
+            ("0,3-5", [0, 3, 4, 5]),  # ranges must expand, not survive as "3-5"
+            ("0,3-5,8", [0, 3, 4, 5, 8]),
+            ("  0 , 13 ", [0, 13]),
+            ([13, 0, 0], [0, 13]),  # sorted and deduped
+            (7, [7]),
+        ],
+    )
+    def test_pets_normalised_to_sorted_ints(self, pets, expected):
+        ds = self._builder(pets=pets).build_config([{"name": "case_a"}])["default_settings"]
+        assert ds["pets"] == expected
+        assert all(isinstance(p, int) for p in ds["pets"])
+
+    @pytest.mark.parametrize("pets", ["0,13", "0,3-5", "0,3-5,8"])
+    def test_built_config_parses_and_matches_the_yaml_path(self, pets):
+        # the builder must never emit a pets value the parser would reject;
+        # "0,3-5" used to survive as ["0", "3-5"] and blow up on int()
+        built = self._builder(pets=pets).build_config([{"name": "case_a"}])
+        via_builder, _ = parse_post_summary_config(built)
+        via_yaml, _ = parse_post_summary_config(
+            {"default_settings": {"post_base_path": "/post/base", "pets": pets}, "runs": [{"name": "case_a"}]}
+        )
+        assert via_builder.pets == via_yaml.pets
 
     def test_default_overwrite_applied_last(self):
         builder = self._builder(default_overwrite={"timeseries_suffix": "_custom.json"})

@@ -3,7 +3,7 @@ from dataclasses import replace
 from pathlib import Path
 
 from .batch_runs import run_batch_jobs
-from .config import DefaultSettings, RunSettings, load_post_summary_config, load_yaml_config
+from .config import DefaultSettings, RunSettings, _norm_pets, load_post_summary_config, load_yaml_config
 from .postprocess import post_summary_from_yaml
 from .utils import normalise_str_list
 
@@ -236,7 +236,7 @@ class ACCESSPostSummaryConfigBuilder:
         self,
         post_base_path: str | Path,
         model_component: str | list[str] | None = None,
-        pets: str | list[int] | None = None,
+        pets: str | int | list[int] | None = None,
         stats_start_index: int | None = None,
         stats_end_index: int | None = None,
         all_runs_summary_path: str | Path | None = None,
@@ -293,7 +293,8 @@ class ACCESSPostSummaryConfigBuilder:
         minimum requirement per run:
             - {"name": "branch_name"}
         common fields all optional:
-            - pets: "0, 52" or [0, 52]
+            - pets: "0,52", "0,3-5" (ranges expand), [0, 52], or a bare 52;
+              always emitted as a sorted list[int]
             - model_component: list[str] or comma-separated str
             - output_index: "1,3-5,6" or [1,3,4,5,6]
             - stats_start_index: int
@@ -319,12 +320,12 @@ class ACCESSPostSummaryConfigBuilder:
 
         default_settings["model_component"] = normalise_str_list(self.model_component)
 
+        # Normalise with the same helper the config parser uses, so the built
+        # dict can never contain a pets value the parser would then reject.
+        # Splitting on commas here is not enough: it leaves "3-5" as a literal
+        # string, which int() later chokes on.
         if self.pets is not None:
-            default_settings["pets"] = (
-                self.pets
-                if isinstance(self.pets, list)
-                else [s.strip() for s in str(self.pets).split(",") if s.strip()]
-            )
+            default_settings["pets"] = _norm_pets(self.pets)
         if self.stats_start_index is not None:
             default_settings["stats_start_index"] = self.stats_start_index
         if self.stats_end_index is not None:
