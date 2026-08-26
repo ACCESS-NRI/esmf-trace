@@ -400,8 +400,9 @@ def post_summary_from_yaml(
             include_per_output=include_per_output,
         )
 
-        # Save per-run json if this run specified a save path (strict .json)
-        per_run_save = _resolve_save_json_path(r.save_json_path) if r.save_json_path is not None else None
+        # Save per-run json if this run specified a save path (strict .json);
+        # _resolve_save_json_path returns None when the run didn't set one.
+        per_run_save = _resolve_save_json_path(r.save_json_path)
         if per_run_save is not None:
             (
                 _to_public_table(selected_case_summary)

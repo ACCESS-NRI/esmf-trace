@@ -1,4 +1,5 @@
 import json
+from pathlib import Path
 
 import pandas as pd
 import pytest
@@ -130,7 +131,14 @@ class TestSelectSummaryRows:
 
 class TestResolveSaveJsonPath:
     def test_none_returns_none(self):
+        # callers rely on this instead of guarding at the call site
         assert _resolve_save_json_path(None) is None
+
+    def test_none_does_not_touch_the_filesystem(self, monkeypatch):
+        called = []
+        monkeypatch.setattr(Path, "mkdir", lambda self, *a, **kw: called.append(self))
+        assert _resolve_save_json_path(None) is None
+        assert called == []
 
     def test_non_json_suffix_raises(self, tmp_path):
         with pytest.raises(ValueError, match="must explicitly end with"):
@@ -386,6 +394,29 @@ class TestPostSummaryFromYaml:
         assert run_save.is_file()
         saved = json.loads(run_save.read_text())
         assert all(r["output_name"] == "combine" for r in saved)
+
+    def test_run_without_save_json_path_writes_nothing(self, tmp_path, capsys):
+        _write_case_output(tmp_path, "case_a", 0, [_row("A", 0, 1.0)])
+        defaults = PostSummarySettings(post_base_path=tmp_path)
+        runs = [PostRunSettings(name="case_a")]  # no save_json_path
+        post_summary_from_yaml(defaults, runs)
+        assert "saved per-run summary JSON" not in capsys.readouterr().out
+        assert not list(tmp_path.glob("*.json"))
+
+    def test_mixed_runs_only_save_the_ones_that_asked(self, tmp_path):
+        _write_case_output(tmp_path, "case_a", 0, [_row("A", 0, 1.0)])
+        _write_case_output(tmp_path, "case_b", 0, [_row("A", 0, 2.0)])
+        run_save = tmp_path / "only_b.json"
+        defaults = PostSummarySettings(post_base_path=tmp_path)
+        runs = [
+            PostRunSettings(name="case_a"),
+            PostRunSettings(name="case_b", save_json_path=run_save),
+        ]
+        post_summary_from_yaml(defaults, runs)
+        assert run_save.is_file()
+        # case_b contributes an output row and a combine row, and case_a
+        # must not appear in a file it never asked for
+        assert {r["case_name"] for r in json.loads(run_save.read_text())} == {"case_b"}
 
     def test_missing_case_directory_is_skipped_not_fatal(self, tmp_path, capsys):
         _write_case_output(tmp_path, "case_a", 0, [_row("A", 0, 1.0)])
