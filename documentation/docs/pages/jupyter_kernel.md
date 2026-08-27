@@ -36,8 +36,6 @@ Expand **Advanced options** and fill in three fields:
 
 ![ARE-module-selection](/assets/ARE-module-selection.png){: loading="lazy" }
 
-The screenshot shows the unversioned `model-tools/babeltrace2`, which resolves to the current default module. Pinning the version keeps the environment reproducible.
-
 Together these three fields are the ARE equivalent of what [`activate_gadi.sh`](https://github.com/ACCESS-NRI/esmf-trace/blob/main/activate_gadi.sh) does in a terminal:
 
 ```bash
