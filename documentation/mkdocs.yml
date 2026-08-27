@@ -95,7 +95,7 @@ markdown_extensions:
 # Navigation
 nav:
   - Home:                  pages/index.md
-  - Instructions in jupyter kernel: pages/jupyter_kernel.md
+  - Jupyter notebooks on Gadi: pages/jupyter_kernel.md
   - Post-summary configuration: pages/post_summary.md
 
 # Footer
