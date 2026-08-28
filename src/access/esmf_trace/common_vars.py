@@ -12,6 +12,7 @@ RUN_DEFAULT_FLAG_KEYS = [
     "xaxis_datetime",
     "separate_plots",
     "show_html",
+    "force",
 ]
 
 RUN_DEFAULT_KEYS = [

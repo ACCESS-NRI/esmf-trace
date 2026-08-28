@@ -26,6 +26,8 @@ class DefaultSettings:
         as a comma-separated string or a list.
     max_workers: number of worker processes. None falls back to the physical
         core count.
+    force: reprocess every job even when its outputs already exist and the
+        settings that produced them are unchanged.
     max_depth: drop trace regions nested deeper than this.
     merge_adjacent, merge_gap_ns: merge consecutive spans of the same component
         separated by no more than merge_gap_ns nanoseconds.
@@ -45,6 +47,7 @@ class DefaultSettings:
     max_depth: int = 6
     merge_adjacent: bool = False
     merge_gap_ns: int = 1000
+    force: bool = False
 
 
 @dataclass(frozen=True)
@@ -169,6 +172,12 @@ class RunSettings:
 
         base_prefix, pets and model_component are the only per-run values a
         worker sees; everything else is taken from the config-wide defaults.
+
+        Only add settings here that change what a job writes. Everything
+        returned is fingerprinted into the sidecar that decides whether
+        existing outputs can be reused (see batch_runs._output_fingerprint), so
+        an orchestration flag like `force` would make each run disagree with
+        the last and trigger a pointless reprocess.
         """
         return {
             "traceout_path": traceout_path,
@@ -482,6 +491,7 @@ def load_yaml_config(config_path: Path, kind: config_kind):
             max_depth=int(default.get("max_depth", 6)),
             merge_adjacent=bool(default.get("merge_adjacent", False)),
             merge_gap_ns=int(default.get("merge_gap_ns", 1000)),
+            force=bool(default.get("force", False)),
         )
 
         run_settings: list[RunSettings] = []

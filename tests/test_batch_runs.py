@@ -3,7 +3,14 @@ from pathlib import Path
 import pytest
 
 from access.esmf_trace import batch_runs
-from access.esmf_trace.batch_runs import _display_path, run_batch_jobs
+from access.esmf_trace.batch_runs import (
+    RUN_SETTINGS_SUFFIX,
+    _changed_settings,
+    _display_path,
+    _output_fingerprint,
+    _read_recorded_settings,
+    run_batch_jobs,
+)
 from access.esmf_trace.config import DefaultSettings, RunSettings
 
 
@@ -48,6 +55,31 @@ def serial_pool(monkeypatch):
 def stub_run(monkeypatch):
     """Replace the bt2 work with a no-op so only the batch plumbing is exercised."""
     monkeypatch.setattr(batch_runs, "single_run", lambda ns: (0, "success!"))
+
+
+def _writing_single_run(calls):
+    """
+    single_run stand-in that writes the two files a real run would, so a
+    following batch sees outputs on disk. Appends each namespace it is called
+    with to `calls`, i.e. the jobs that were not skipped.
+    """
+
+    def _run(ns):
+        calls.append(ns)
+        post_dir = Path(ns.post_dir)
+        post_dir.mkdir(parents=True, exist_ok=True)
+        (post_dir / f"{ns.base_prefix}_timeseries.json").write_text("[]")
+        (post_dir / f"{ns.base_prefix}_flamegraph.html").write_text("<html></html>")
+        return (0, "success!")
+
+    return _run
+
+
+@pytest.fixture
+def writing_run(monkeypatch):
+    calls = []
+    monkeypatch.setattr(batch_runs, "single_run", _writing_single_run(calls))
+    return calls
 
 
 @pytest.fixture
@@ -141,7 +173,7 @@ class TestRunBatchJobsProgressOutput:
         run_batch_jobs(defaults, runs)
 
         out = capsys.readouterr().out
-        assert "already exist in postprocessing_p/output000" in out
+        assert "(settings not recorded) in postprocessing_p/output000" in out
         assert "No jobs to run" in out
 
     def test_label_is_relative_to_each_runs_own_base(self, tmp_path, archive, serial_pool, stub_run, capsys):
@@ -158,3 +190,165 @@ class TestRunBatchJobsProgressOutput:
         assert "[postprocessing_b/output000] success!" in out
         assert "Successful jobs: 2" in out
         assert Path(tmp_path / "other_post" / "postprocessing_b" / "output000").is_dir()
+
+
+class TestFingerprintHelpers:
+    def test_excludes_settings_that_do_not_affect_written_output(self):
+        fingerprint = _output_fingerprint({"max_depth": 6, "post_dir": Path("/a"), "show_html": True})
+        assert fingerprint == {"max_depth": 6}
+
+    def test_paths_are_recorded_as_strings(self):
+        assert _output_fingerprint({"traceout_path": Path("/a/traceout")}) == {"traceout_path": "/a/traceout"}
+
+    def test_changed_settings_reports_differing_and_one_sided_keys(self):
+        assert _changed_settings({"a": 1, "b": 2}, {"a": 9, "b": 2}) == ["a"]
+        assert _changed_settings({"a": 1}, {"a": 1, "b": 2}) == ["b"]
+        assert _changed_settings({"a": 1}, {"a": 1}) == []
+
+    def test_unreadable_record_reads_as_absent(self, tmp_path):
+        (tmp_path / f"p{RUN_SETTINGS_SUFFIX}").write_text("{not json")
+        assert _read_recorded_settings(tmp_path, "p") is None
+
+    def test_non_mapping_record_reads_as_absent(self, tmp_path):
+        (tmp_path / f"p{RUN_SETTINGS_SUFFIX}").write_text("[1, 2, 3]")
+        assert _read_recorded_settings(tmp_path, "p") is None
+
+    def test_missing_record_reads_as_absent(self, tmp_path):
+        assert _read_recorded_settings(tmp_path, "p") is None
+
+    def test_record_name_is_not_picked_up_by_the_post_summary_glob(self):
+        """post-summary collects *_timeseries.json; the sidecar must not match."""
+        assert not f"p{RUN_SETTINGS_SUFFIX}".endswith("_timeseries.json")
+
+
+class TestReprocessOnChangedSettings:
+    """
+    Outputs used to be reused on the strength of their filenames alone, so a
+    re-run with a wider max_depth or a different model_component silently kept
+    the old results. They are now reused only when the settings recorded beside
+    them match.
+    """
+
+    def _run(self, tmp_path, archive, **defaults_kwargs):
+        defaults = DefaultSettings(post_base_path=str(tmp_path / "post"), **defaults_kwargs)
+        run_batch_jobs(defaults, [RunSettings(base_prefix="p", exact_path=archive)])
+
+    def test_first_run_records_the_settings(self, tmp_path, archive, serial_pool, writing_run):
+        self._run(tmp_path, archive, max_depth=6)
+
+        recorded = _read_recorded_settings(tmp_path / "post" / "postprocessing_p" / "output000", "p")
+        assert recorded is not None
+        assert recorded["max_depth"] == 6
+        assert "post_dir" not in recorded
+
+    def test_unchanged_settings_skip(self, tmp_path, archive, serial_pool, writing_run, capsys):
+        self._run(tmp_path, archive, max_depth=6)
+        capsys.readouterr()
+
+        self._run(tmp_path, archive, max_depth=6)
+
+        assert len(writing_run) == 1
+        assert "settings are unchanged" in capsys.readouterr().out
+
+    def test_changed_max_depth_reprocesses_and_names_the_setting(
+        self, tmp_path, archive, serial_pool, writing_run, capsys
+    ):
+        self._run(tmp_path, archive, max_depth=6)
+        capsys.readouterr()
+
+        self._run(tmp_path, archive, max_depth=20)
+
+        assert len(writing_run) == 2
+        out = capsys.readouterr().out
+        assert "settings changed since these outputs were written (max_depth), reprocessing" in out
+        assert "Successful jobs: 1" in out
+
+    def test_changed_model_component_reprocesses(self, tmp_path, archive, serial_pool, writing_run, capsys):
+        self._run(tmp_path, archive, model_component="[OCN] RunPhase1")
+        capsys.readouterr()
+
+        self._run(tmp_path, archive, model_component="[ICE] RunPhase1")
+
+        assert len(writing_run) == 2
+        assert "(model_component)" in capsys.readouterr().out
+
+    def test_reprocessing_updates_the_record(self, tmp_path, archive, serial_pool, writing_run):
+        self._run(tmp_path, archive, max_depth=6)
+        self._run(tmp_path, archive, max_depth=20)
+
+        recorded = _read_recorded_settings(tmp_path / "post" / "postprocessing_p" / "output000", "p")
+        assert recorded["max_depth"] == 20
+
+    def test_show_html_alone_does_not_reprocess(self, tmp_path, archive, serial_pool, writing_run, capsys):
+        self._run(tmp_path, archive, show_html=False)
+        capsys.readouterr()
+
+        self._run(tmp_path, archive, show_html=True)
+
+        assert len(writing_run) == 1
+        assert "settings are unchanged" in capsys.readouterr().out
+
+    def test_force_reprocesses_unchanged_settings(self, tmp_path, archive, serial_pool, writing_run, capsys):
+        self._run(tmp_path, archive, max_depth=6)
+        capsys.readouterr()
+
+        self._run(tmp_path, archive, max_depth=6, force=True)
+
+        assert len(writing_run) == 2
+        out = capsys.readouterr().out
+        assert "skip postprocessing" not in out
+        assert "Successful jobs: 1" in out
+
+    def test_outputs_without_a_record_are_still_reused(self, tmp_path, archive, serial_pool, writing_run, capsys):
+        post_dir = tmp_path / "post" / "postprocessing_p" / "output000"
+        post_dir.mkdir(parents=True)
+        (post_dir / "p_timeseries.json").write_text("[]")
+        (post_dir / "p_flamegraph.html").write_text("<html></html>")
+
+        self._run(tmp_path, archive, max_depth=20)
+
+        assert writing_run == []
+        assert "(settings not recorded)" in capsys.readouterr().out
+
+    def test_no_record_is_backfilled_for_outputs_of_unknown_provenance(
+        self, tmp_path, archive, serial_pool, writing_run
+    ):
+        """Their real settings are unknown, so claiming the current ones would be a lie."""
+        post_dir = tmp_path / "post" / "postprocessing_p" / "output000"
+        post_dir.mkdir(parents=True)
+        (post_dir / "p_timeseries.json").write_text("[]")
+        (post_dir / "p_flamegraph.html").write_text("<html></html>")
+
+        self._run(tmp_path, archive, max_depth=20)
+
+        assert _read_recorded_settings(post_dir, "p") is None
+
+    def test_corrupt_record_falls_back_to_reuse(self, tmp_path, archive, serial_pool, writing_run, capsys):
+        self._run(tmp_path, archive, max_depth=6)
+        record = tmp_path / "post" / "postprocessing_p" / "output000" / f"p{RUN_SETTINGS_SUFFIX}"
+        record.write_text("{truncated")
+        capsys.readouterr()
+
+        self._run(tmp_path, archive, max_depth=20)
+
+        assert len(writing_run) == 1
+        assert "(settings not recorded)" in capsys.readouterr().out
+
+    def test_failed_job_records_nothing(self, tmp_path, archive, serial_pool, monkeypatch, capsys):
+        monkeypatch.setattr(batch_runs, "single_run", lambda ns: (1, "Failed: boom"))
+
+        self._run(tmp_path, archive, max_depth=6)
+
+        post_dir = tmp_path / "post" / "postprocessing_p" / "output000"
+        assert _read_recorded_settings(post_dir, "p") is None
+        assert "Failed jobs: 1" in capsys.readouterr().out
+
+    def test_a_failed_job_is_retried_next_time(self, tmp_path, archive, serial_pool, monkeypatch):
+        monkeypatch.setattr(batch_runs, "single_run", lambda ns: (1, "Failed: boom"))
+        self._run(tmp_path, archive, max_depth=6)
+
+        calls = []
+        monkeypatch.setattr(batch_runs, "single_run", _writing_single_run(calls))
+        self._run(tmp_path, archive, max_depth=6)
+
+        assert len(calls) == 1
