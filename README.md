@@ -1,3 +1,9 @@
+[![CI](https://github.com/ACCESS-NRI/esmf-trace/actions/workflows/ci.yml/badge.svg)](https://github.com/ACCESS-NRI/esmf-trace/actions/workflows/ci.yml)
+[![CD](https://github.com/ACCESS-NRI/esmf-trace/actions/workflows/CD.yml/badge.svg)](https://github.com/ACCESS-NRI/esmf-trace/actions/workflows/CD.yml)
+[![Check links](https://github.com/ACCESS-NRI/esmf-trace/actions/workflows/check_links.yml/badge.svg)](https://github.com/ACCESS-NRI/esmf-trace/actions/workflows/check_links.yml)
+[![License](https://img.shields.io/badge/license-Apache%202.0-blue?style=flat-square)](https://opensource.org/license/apache-2-0)
+[![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
+
 # esmf-trace
 
 ## About
