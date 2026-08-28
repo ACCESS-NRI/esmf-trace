@@ -69,6 +69,14 @@ def _add_run_overrides(parser: argparse.ArgumentParser) -> None:
         type=int,
         help="Override the maximum number of workers for parallel processing from config (default: number of CPUs)",
     )
+    arg.add_argument(
+        "--force",
+        action="store_true",
+        help=(
+            "Reprocess every job, even where the outputs already exist and were produced"
+            " by the same settings (default: False)"
+        ),
+    )
 
 
 def _apply_run_overrides(ns: argparse.Namespace) -> dict:
