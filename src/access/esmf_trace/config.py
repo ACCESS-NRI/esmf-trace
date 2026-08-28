@@ -13,6 +13,26 @@ class ConfigError(Exception):
 
 @dataclass(frozen=True)
 class DefaultSettings:
+    """
+    The `default_settings:` block of a run config - values shared by every run
+    in it. A run may override post_base_path and model_component; everything
+    else here applies to the whole batch.
+
+    post_base_path: root directory results are written under. See RunSettings
+        for how the tree beneath it is laid out.
+    stream_prefix: filename prefix of the per-PET CTF stream files inside each
+        traceout dir, e.g. "esmf_stream" for esmf_stream_0000.
+    model_component: default component selector(s) to keep in the timeseries,
+        as a comma-separated string or a list.
+    max_workers: number of worker processes. None falls back to the physical
+        core count.
+    max_depth: drop trace regions nested deeper than this.
+    merge_adjacent, merge_gap_ns: merge consecutive spans of the same component
+        separated by no more than merge_gap_ns nanoseconds.
+    xaxis_datetime, separate_plots, cmap, renderer, show_html: flame graph
+        options, passed straight through to plot_flame_graph.
+    """
+
     post_base_path: str | None = None
     stream_prefix: str = "esmf_stream"
     model_component: str | list[str] = "[ESMF]/[ensemble] RunPhase1/[ESM0001] RunPhase1"
@@ -29,6 +49,57 @@ class DefaultSettings:
 
 @dataclass(frozen=True)
 class RunSettings:
+    """
+    One entry in a run config's `runs:` list - a single experiment to process.
+
+    A run reads a trace tree and writes a postprocessed tree. The two sides are
+    configured independently: nothing about the output location is derived from
+    the input path, or the other way round.
+
+        INPUT - the payu archive directory, given either as exact_path or
+        assembled from run_base/run_name/branch/archive:
+
+            <archive dir>/
+              output000/traceout/esmf_stream_0000, esmf_stream_0001, ...
+              output001/traceout/...
+
+        OUTPUT - written under post_base_path and named by base_prefix:
+
+            <post_base_path>/
+              postprocessing_<base_prefix>/
+                output000/
+                  <base_prefix>_timeseries.json
+                  <base_prefix>_flamegraph.html
+                output001/
+                  ...
+
+    One job runs per outputNNN directory, so a run covering three outputs
+    becomes three jobs writing three output subdirectories.
+
+    base_prefix: label for this run's output tree - it names both the
+        postprocessing_<base_prefix> directory and the files inside it. It
+        plays no part in locating the input, so a run still needs it when
+        exact_path is set. A post-summary config refers back to this run by the
+        full directory name, i.e. its `name:` must be
+        "postprocessing_<base_prefix>".
+    post_base_path: output root for this run, overriding the config-wide
+        DefaultSettings.post_base_path. Most configs set it once in
+        default_settings and leave it unset here.
+    exact_path: the archive directory to read, given directly.
+    run_base, run_name, branch, archive: the alternative to exact_path, joined
+        as run_base/run_name/branch/archive. `archive` defaults to "archive"
+        and is only consulted in this form.
+    pets: PET indices to read, as a range string like "0,13" or "0,3-5". None
+        reads every stream file found in the traceout dir.
+    model_component: component selector(s) to keep in the timeseries; falls
+        back to DefaultSettings.model_component when unset.
+    output_index: which outputNNN directories to process, as a range string
+        like "0,2-4". None processes all of them.
+
+    Either exact_path or all of run_base/run_name/branch must be set; if both
+    forms are given, exact_path wins - see _resolve_exact_paths.
+    """
+
     base_prefix: str | None = None
     post_base_path: str | None = None
     exact_path: Path | None = None
@@ -42,10 +113,16 @@ class RunSettings:
 
     def _resolve_exact_paths(self) -> Path | None:
         """
-        Return the exact dir for this run
-            - if exact_path is set, use that.
-            - else if run_base, run_name, branch are set, construct the path as:
-                run_base / run_name / branch / archive
+        Return this run's INPUT archive directory, or None if underspecified.
+
+        exact_path takes precedence: when it is set, run_base/run_name/branch/
+        archive are ignored entirely. Otherwise all three of run_base, run_name
+        and branch must be present and the path is joined as
+        run_base/run_name/branch/archive.
+
+        None means neither form was fully given. load_yaml_config rejects that
+        up front, but the dict form of run_from_config does not, so
+        run_batch_jobs checks again before using the result.
         """
         if self.exact_path:
             return Path(self.exact_path).expanduser().resolve()
@@ -54,9 +131,23 @@ class RunSettings:
         return None
 
     def _effective_post_base_path(self, defaults: DefaultSettings) -> Path:
+        """
+        Return the OUTPUT root for this run: its own post_base_path if set,
+        otherwise the config-wide default. Expanded and resolved, so the result
+        is absolute even when the config spelled it "~/x" or "../x".
+
+        Every post_dir for this run hangs off this path, and progress messages
+        are shown relative to it. defaults.post_base_path is the raw configured
+        value and is not interchangeable with this.
+        """
         return Path(self.post_base_path if self.post_base_path else defaults.post_base_path).expanduser().resolve()
 
     def normalised_model_component(self, defaults: DefaultSettings) -> str:
+        """
+        Return the component selector as the single comma-separated string
+        run.run() expects, preferring this run's value over the config-wide
+        default. A list is joined with commas.
+        """
         mc = self.model_component if self.model_component is not None else defaults.model_component
         if isinstance(mc, list):
             return ",".join(mc)
@@ -69,7 +160,15 @@ class RunSettings:
         post_dir: Path,
     ) -> dict:
         """
-        Produce kwargs for the single run
+        Produce the kwargs for one job, i.e. one outputNNN directory.
+
+        traceout_path: the INPUT <outputNNN>/traceout dir holding the
+            per-PET stream files.
+        post_dir: the OUTPUT dir for this one job,
+            <post_base_path>/postprocessing_<base_prefix>/<outputNNN>.
+
+        base_prefix, pets and model_component are the only per-run values a
+        worker sees; everything else is taken from the config-wide defaults.
         """
         return {
             "traceout_path": traceout_path,

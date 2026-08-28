@@ -10,6 +10,10 @@ from .utils import extract_index_list_from_str, output_name_to_index
 
 
 def _find_traceout_dir(output_dir: Path, stream_prefix: str) -> Path | None:
+    """
+    Return <outputNNN>/traceout if it exists and holds at least one
+    <stream_prefix>_* file, else None. This is the input a single job reads.
+    """
     tdir = output_dir / "traceout"
     return tdir if (tdir.is_dir() and any(tdir.glob(f"{stream_prefix}_*"))) else None
 
@@ -30,6 +34,12 @@ def _display_path(post_dir: Path, post_base_path: Path) -> str:
 
 
 def _expected_outputs_exist(post_dir: Path, base_prefix: str) -> bool:
+    """
+    True if both files a job would write are already present in post_dir.
+
+    Only filenames are checked, not the settings that produced them - see
+    run_batch_jobs for what that means for re-runs.
+    """
     expected = [
         post_dir / f"{base_prefix}_timeseries.json",
         post_dir / f"{base_prefix}_flamegraph.html",
@@ -38,6 +48,14 @@ def _expected_outputs_exist(post_dir: Path, base_prefix: str) -> bool:
 
 
 def _gather_outputs(archive_dir: Path, output_index: str | None) -> list[Path]:
+    """
+    Return the outputNNN dirs to process, sorted by index.
+
+    archive_dir is a run's resolved input archive dir (RunSettings.exact_path
+    or the run_base/run_name/branch/archive form). output_index is a range
+    string like "0,2-4"; None means every outputNNN present. Requested indices
+    that aren't on disk are warned about, not treated as an error.
+    """
     if not archive_dir.is_dir():
         print(f"-- skip not a dir: {archive_dir}")
         return []
@@ -71,12 +89,24 @@ def run_one_job(ns: argparse.Namespace) -> tuple[int, str]:
 
 def run_batch_jobs(defaults: DefaultSettings, runs: list[RunSettings]) -> None:
     """
-    Batch runs:
-        - resolve exact path
-        - iterate over output dirs
-        - find traceout dir
-        - build postprocessing output dir
-        - call run.run() in parallel
+    Expand every run into one job per outputNNN directory, then process the
+    jobs in parallel.
+
+    Per run:
+        - resolve the input archive dir (exact_path, or the run_base/run_name/
+          branch/archive form)
+        - pick the outputNNN dirs to process, honouring output_index
+        - locate <outputNNN>/traceout inside each
+        - derive the matching output dir,
+          <post_base_path>/postprocessing_<base_prefix>/<outputNNN>
+        - hand the pair to run.run() in a worker process
+
+    See RunSettings for the full directory layout and what base_prefix names.
+
+    A job whose two output files already exist is skipped. That check is by
+    filename only, so re-running with different settings (a wider max_depth,
+    another model_component) will not regenerate anything - clear the output
+    dir first.
     """
 
     max_workers = defaults.max_workers or (psutil.cpu_count(logical=False) or 1)

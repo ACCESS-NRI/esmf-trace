@@ -60,6 +60,13 @@ def archive(tmp_path):
 
 
 class TestDisplayPath:
+    """
+    post_dir is always built by appending to post_base_path, so the fallback
+    below cannot be reached through run_batch_jobs. It is still pinned here:
+    the helper exists to keep a mismatched base from killing a finished batch,
+    and an untested guard is one refactor away from being dropped.
+    """
+
     def test_relative_to_its_own_base(self, tmp_path):
         assert _display_path(tmp_path / "post" / "run" / "output000", tmp_path / "post") == "run/output000"
 
