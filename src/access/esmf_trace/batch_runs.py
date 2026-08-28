@@ -14,6 +14,21 @@ def _find_traceout_dir(output_dir: Path, stream_prefix: str) -> Path | None:
     return tdir if (tdir.is_dir() and any(tdir.glob(f"{stream_prefix}_*"))) else None
 
 
+def _display_path(post_dir: Path, post_base_path: Path) -> str:
+    """
+    Short label for a post dir, relative to the base it was built from.
+
+    That base is the run's effective post_base_path, which is resolved and may
+    come from the run itself rather than from default_settings - so it is not
+    interchangeable with defaults.post_base_path. Fall back to the full path if
+    the two ever fail to share a prefix, since this only feeds progress output.
+    """
+    try:
+        return str(post_dir.relative_to(post_base_path))
+    except ValueError:
+        return str(post_dir)
+
+
 def _expected_outputs_exist(post_dir: Path, base_prefix: str) -> bool:
     expected = [
         post_dir / f"{base_prefix}_timeseries.json",
@@ -90,17 +105,17 @@ def run_batch_jobs(defaults: DefaultSettings, runs: list[RunSettings]) -> None:
 
             post_dir = post_base_path / f"postprocessing_{base_prefix}" / outdir.name
 
+            label = _display_path(post_dir, post_base_path)
+
             if _expected_outputs_exist(post_dir, base_prefix):
-                print(
-                    f"-- skip postprocessing, expected outputs already exist in {post_dir.relative_to(post_base_path)}"
-                )
+                print(f"-- skip postprocessing, expected outputs already exist in {label}")
                 continue
 
             post_dir.mkdir(parents=True, exist_ok=True)
 
             job_kwargs = run.to_job_kwargs(defaults=defaults, traceout_path=traceout_path, post_dir=post_dir)
             ns = _build_namespace(job_kwargs)
-            jobs.append((ns, post_dir))
+            jobs.append((ns, label))
 
     if not jobs:
         print("-- No jobs to run. All done or nothing to do.")
@@ -112,20 +127,20 @@ def run_batch_jobs(defaults: DefaultSettings, runs: list[RunSettings]) -> None:
     n_fail = 0
 
     with ProcessPoolExecutor(max_workers=max_workers) as exe:
-        tmp_jobs = {exe.submit(run_one_job, ns): (ns, post_dir) for ns, post_dir in jobs}
+        tmp_jobs = {exe.submit(run_one_job, ns): (ns, label) for ns, label in jobs}
         for tmp in as_completed(tmp_jobs):
-            ns, post_dir = tmp_jobs[tmp]
+            ns, label = tmp_jobs[tmp]
             try:
                 ret, msg = tmp.result()
             except Exception as e:
                 n_fail += 1
-                print(f"[{post_dir}] EXCEPTION: {e}")
+                print(f"[{label}] EXCEPTION: {e}")
             else:
                 if ret == 0:
                     n_ok += 1
                 else:
                     n_fail += 1
-                print(f"[{post_dir.relative_to(defaults.post_base_path)}] {msg}")
+                print(f"[{label}] {msg}")
 
     print("\n")
     print("=== Summary ===")
