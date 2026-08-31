@@ -253,7 +253,10 @@ def run_batch_jobs(defaults: DefaultSettings, runs: list[RunSettings]) -> BatchR
     for run in runs:
         exact_path = run._resolve_exact_paths()
         if not exact_path:
-            raise ConfigError(f"-- cannot resolve {exact_path}, please check config!")
+            raise ConfigError(
+                f"-- cannot resolve an input path for run {run.base_prefix!r}: "
+                "set 'exact_path', or all of 'run_base', 'run_name' and 'branch'"
+            )
 
         base_prefix = run.base_prefix
         post_base_path = run._effective_post_base_path(defaults)

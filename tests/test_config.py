@@ -6,8 +6,10 @@ from access.esmf_trace.config import (
     ConfigError,
     _norm_pets,
     load_post_summary_config,
+    load_run_config,
     load_yaml_config,
     parse_post_summary_config,
+    parse_run_config,
 )
 from access.esmf_trace.tmp_yaml_parser import write_yaml
 
@@ -275,3 +277,95 @@ class TestLoadYamlConfigDispatch:
         write_yaml({"default_settings": {}, "runs": []}, yaml_path)
         with pytest.raises(ValueError, match="Invalid config kind"):
             load_yaml_config(yaml_path, kind="bogus")
+
+
+class TestParseRunConfig:
+    """
+    Run configs used to be validated only on the YAML path, and only for a
+    missing exact_path - typos were dropped silently and a dict config
+    (what ACCESSRunConfigBuilder produces) skipped the checks entirely.
+    """
+
+    def _data(self, default=None, runs=None):
+        return {
+            "default_settings": {"post_base_path": "/base", **(default or {})},
+            "runs": runs if runs is not None else [{"exact_path": "/x", "base_prefix": "p"}],
+        }
+
+    def test_valid_config_parses(self):
+        defaults, runs = parse_run_config(self._data({"max_depth": 3}))
+        assert defaults.max_depth == 3
+        assert runs[0].exact_path == Path("/x")
+
+    def test_typo_in_default_settings_is_rejected(self):
+        with pytest.raises(ConfigError, match="max_dpeth"):
+            parse_run_config(self._data({"max_dpeth": 99}))
+
+    def test_typo_in_a_run_entry_is_rejected(self):
+        with pytest.raises(ConfigError, match="base_prefx"):
+            parse_run_config(self._data(runs=[{"exact_path": "/x", "base_prefx": "p"}]))
+
+    def test_typo_in_overrides_is_rejected(self):
+        with pytest.raises(ConfigError, match="run_overrides"):
+            parse_run_config(self._data(), default_overrides={"max_dpeth": 9})
+
+    def test_overrides_are_applied(self):
+        defaults, _ = parse_run_config(self._data({"max_depth": 3}), default_overrides={"max_depth": 20})
+        assert defaults.max_depth == 20
+
+    def test_empty_config_raises_config_error(self):
+        with pytest.raises(ConfigError, match="run config"):
+            parse_run_config(None)
+
+    def test_missing_runs_key_raises_config_error(self):
+        with pytest.raises(ConfigError, match="runs"):
+            parse_run_config({"default_settings": {"post_base_path": "/base"}})
+
+    def test_non_numeric_max_depth_raises_config_error(self):
+        with pytest.raises(ConfigError, match="default_settings"):
+            parse_run_config(self._data({"max_depth": "deep"}))
+
+    def test_run_without_any_input_path_is_rejected(self):
+        with pytest.raises(ConfigError, match="exact_path"):
+            parse_run_config(self._data(runs=[{"base_prefix": "p"}]))
+
+    def test_partial_triplet_is_rejected(self):
+        with pytest.raises(ConfigError, match="exact_path"):
+            parse_run_config(self._data(runs=[{"run_base": "/b", "run_name": "n"}]))
+
+    def test_full_triplet_is_accepted(self):
+        _, runs = parse_run_config(self._data(runs=[{"run_base": "/b", "run_name": "n", "branch": "br"}]))
+        assert runs[0].run_name == "n"
+
+    def test_no_post_base_path_anywhere_is_rejected(self):
+        with pytest.raises(ConfigError, match="post_base_path"):
+            parse_run_config({"default_settings": {}, "runs": [{"exact_path": "/x"}]})
+
+    def test_a_run_may_supply_its_own_post_base_path(self):
+        _, runs = parse_run_config(
+            {"default_settings": {}, "runs": [{"exact_path": "/x", "post_base_path": "/own"}]},
+        )
+        assert runs[0].post_base_path == "/own"
+
+
+class TestLoadRunConfig:
+    def test_accepts_a_yaml_path(self, tmp_path):
+        path = tmp_path / "run.yaml"
+        write_yaml({"default_settings": {"post_base_path": "/base"}, "runs": [{"exact_path": "/x"}]}, path)
+        defaults, runs = load_run_config(path)
+        assert defaults.post_base_path == "/base"
+        assert len(runs) == 1
+
+    def test_accepts_an_equivalent_dict(self):
+        defaults, runs = load_run_config(
+            {"default_settings": {"post_base_path": "/base"}, "runs": [{"exact_path": "/x"}]}
+        )
+        assert defaults.post_base_path == "/base"
+        assert len(runs) == 1
+
+    def test_a_dict_config_is_validated_like_a_yaml_one(self):
+        """The dict form is what ACCESSRunConfigBuilder emits; it used to skip every check."""
+        with pytest.raises(ConfigError, match="max_dpeth"):
+            load_run_config(
+                {"default_settings": {"post_base_path": "/b", "max_dpeth": 9}, "runs": [{"exact_path": "/x"}]}
+            )
