@@ -1,9 +1,8 @@
 import re
-from dataclasses import replace
 from pathlib import Path
 
 from .batch_runs import BatchResult, run_batch_jobs
-from .config import DefaultSettings, RunSettings, _norm_pets, load_post_summary_config, load_yaml_config
+from .config import _norm_pets, load_post_summary_config, load_run_config
 from .postprocess import post_summary_from_yaml
 from .utils import normalise_str_list
 
@@ -22,15 +21,7 @@ def run_from_config(
     `result.ok`, or `result.failures` for which ones and why.
     """
 
-    if isinstance(config_path, (str, Path)):
-        defaults, runs = load_yaml_config(Path(config_path), kind="run")
-    else:
-        defaults = DefaultSettings(**config_path["default_settings"])
-        runs = [RunSettings(**r) for r in config_path["runs"]]
-
-    if run_overrides:
-        defaults = replace(defaults, **dict(run_overrides))
-
+    defaults, runs = load_run_config(config_path, default_overrides=run_overrides)
     return run_batch_jobs(defaults, runs)
 
 
@@ -107,7 +98,7 @@ class ACCESSRunConfigBuilder:
         pets_components: list[str], keys to include in pets string in order
         pets_prefix: str, prefix for pets string (default "0")
         max_workers: number of parallel workers to use for postprocessing default 4 for login nodes
-        default_overwrite: Extra keys to merge into default_settings (eg {"timeseries_suffix": "_timeseries.json"}).
+        default_overwrite: Extra default_settings entries, which must be DefaultSettings fields (eg {"max_depth": 8}).
         """
         # core run list
         self.branches = branches

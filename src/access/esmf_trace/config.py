@@ -123,9 +123,9 @@ class RunSettings:
         and branch must be present and the path is joined as
         run_base/run_name/branch/archive.
 
-        None means neither form was fully given. load_yaml_config rejects that
-        up front, but the dict form of run_from_config does not, so
-        run_batch_jobs checks again before using the result.
+        None means neither form was fully given. parse_run_config rejects that
+        up front for both YAML and dict configs; run_batch_jobs checks again
+        before using the result, for callers that build RunSettings directly.
         """
         if self.exact_path:
             return Path(self.exact_path).expanduser().resolve()
@@ -436,6 +436,96 @@ def parse_post_summary_config(
     return defaults, post_runs
 
 
+def parse_run_config(
+    data: dict,
+    default_overrides: dict | None = None,
+) -> tuple[DefaultSettings, list[RunSettings]]:
+    """
+    Validate and normalise a run config (already-loaded dict, e.g. from YAML)
+    into a (DefaultSettings, list[RunSettings]) pair.
+
+    The counterpart to parse_post_summary_config, and the single place run
+    configs are validated - a YAML path and an equivalent dict both come
+    through here, so the two cannot drift apart.
+
+    default_overrides: DefaultSettings field values from the CLI or a library
+        caller, applied on top of the configured defaults. A run that sets the
+        same field on itself still wins.
+
+    Raises ConfigError if the config is empty or malformed, a required key is
+    missing, a key is unrecognised, a value will not convert, a run resolves no
+    input path, or a run has no post_base_path to write to.
+    """
+    data = _as_mapping(data, what="run config")
+    _require_keys(data, ["default_settings", "runs"], where="config")
+    default = dict(_as_mapping(data["default_settings"], what="default_settings"))
+    runs = _as_list(data["runs"], what="runs")
+    overrides = dict(default_overrides or {})
+
+    _reject_unknown_keys(default, _field_names(DefaultSettings), "default_settings")
+    _reject_unknown_keys(overrides, _field_names(DefaultSettings), "run_overrides")
+    default.update(overrides)
+
+    try:
+        defaults = DefaultSettings(
+            post_base_path=default.get("post_base_path"),
+            stream_prefix=default.get("stream_prefix", "esmf_stream"),
+            model_component=default.get("model_component", "[ESMF]/[ensemble] RunPhase1/[ESM0001] RunPhase1"),
+            max_workers=_norm_int_or_none(default.get("max_workers")),
+            xaxis_datetime=bool(default.get("xaxis_datetime", False)),
+            separate_plots=bool(default.get("separate_plots", False)),
+            cmap=default.get("cmap", "tab10"),
+            renderer=default.get("renderer", "browser"),
+            show_html=bool(default.get("show_html", False)),
+            max_depth=int(default.get("max_depth", 6)),
+            merge_adjacent=bool(default.get("merge_adjacent", False)),
+            merge_gap_ns=int(default.get("merge_gap_ns", 1000)),
+            force=bool(default.get("force", False)),
+        )
+    except (TypeError, ValueError) as e:
+        raise ConfigError(f"invalid value in default_settings: {e}") from None
+
+    run_settings: list[RunSettings] = []
+    for i, item in enumerate(runs):
+        item = _as_mapping(item, what=f"runs[{i}]")
+        _reject_unknown_keys(item, _field_names(RunSettings), f"runs[{i}]")
+
+        has_other_parts = item.get("run_base") and item.get("run_name") and item.get("branch")
+        if not item.get("exact_path") and not has_other_parts:
+            raise ConfigError(f"runs[{i}] must set either 'exact_path' or all of 'run_base', 'run_name' and 'branch'")
+        if not item.get("post_base_path") and not defaults.post_base_path:
+            raise ConfigError(f"runs[{i}] has no 'post_base_path', and default_settings sets none")
+
+        run_settings.append(
+            RunSettings(
+                base_prefix=item.get("base_prefix"),
+                post_base_path=item.get("post_base_path"),
+                exact_path=_norm_path_or_none(item.get("exact_path") or None),
+                run_base=_norm_path_or_none(item.get("run_base") or None),
+                run_name=item.get("run_name"),
+                branch=item.get("branch"),
+                archive=item.get("archive", "archive"),
+                pets=item.get("pets"),
+                model_component=item.get("model_component"),
+                output_index=item.get("output_index"),
+            )
+        )
+
+    return defaults, run_settings
+
+
+def load_run_config(
+    config: str | Path | dict,
+    default_overrides: dict | None = None,
+) -> tuple[DefaultSettings, list[RunSettings]]:
+    """
+    Load a run config from a YAML file path or an equivalent dict, then
+    validate and normalise it via parse_run_config().
+    """
+    data = read_yaml(Path(config)) if isinstance(config, (str, Path)) else config
+    return parse_run_config(data, default_overrides=default_overrides)
+
+
 def load_post_summary_config(
     config: str | Path | dict,
     default_overrides: dict | None = None,
@@ -472,55 +562,7 @@ def load_yaml_config(config_path: Path, kind: config_kind):
 
     if kind == "post-summary":
         return parse_post_summary_config(data)
-
-    _require_keys(data, ["default_settings", "runs"], where=str(config_path))
-    default = _as_mapping(data["default_settings"], what="default_settings")
-    runs = _as_list(data["runs"], what="runs")
-
     if kind == "run":
-        defaults = DefaultSettings(
-            post_base_path=default.get("post_base_path"),
-            stream_prefix=default.get("stream_prefix", "esmf_stream"),
-            model_component=default.get("model_component", "[ESMF]/[ensemble] RunPhase1/[ESM0001] RunPhase1"),
-            max_workers=default.get("max_workers"),
-            xaxis_datetime=bool(default.get("xaxis_datetime", False)),
-            separate_plots=bool(default.get("separate_plots", False)),
-            cmap=default.get("cmap", "tab10"),
-            renderer=default.get("renderer", "browser"),
-            show_html=bool(default.get("show_html", False)),
-            max_depth=int(default.get("max_depth", 6)),
-            merge_adjacent=bool(default.get("merge_adjacent", False)),
-            merge_gap_ns=int(default.get("merge_gap_ns", 1000)),
-            force=bool(default.get("force", False)),
-        )
-
-        run_settings: list[RunSettings] = []
-        for i, item in enumerate(runs):
-            item = _as_mapping(item, what=f"runs[{i}]")
-
-            has_exact_path = item.get("exact_path")
-            has_other_parts = item.get("run_base") and item.get("run_name") and item.get("branch")
-            if not has_exact_path and not has_other_parts:
-                raise ConfigError(
-                    "Each run must have either 'exact_path' or "
-                    f"all of 'run_base', 'run_name', and 'branch' set (error in runs[{i}])"
-                )
-
-            run_settings.append(
-                RunSettings(
-                    base_prefix=item.get("base_prefix"),
-                    post_base_path=item.get("post_base_path"),
-                    exact_path=_norm_path_or_none(item.get("exact_path") if item.get("exact_path") else None),
-                    run_base=_norm_path_or_none(item.get("run_base") if item.get("run_base") else None),
-                    run_name=item.get("run_name"),
-                    branch=item.get("branch"),
-                    archive=item.get("archive", "archive"),
-                    pets=item.get("pets"),
-                    model_component=item.get("model_component"),
-                    output_index=item.get("output_index"),
-                )
-            )
-
-        return defaults, run_settings
+        return parse_run_config(data)
 
     raise ValueError(f"Invalid config kind: {kind}")
