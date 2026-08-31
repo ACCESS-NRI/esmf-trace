@@ -4,6 +4,11 @@ from pathlib import Path
 from .common_vars import POST_SUMMARY_DEFAULT_KEYS, RUN_DEFAULT_FLAG_KEYS, RUN_DEFAULT_KEYS
 from .library import post_summary_from_config, run_from_config
 
+EXIT_OK = 0
+# At least one job did not produce its outputs. Config and setup problems raise
+# instead, so they surface as a traceback rather than this code.
+EXIT_JOB_FAILED = 1
+
 
 def _add_run_overrides(parser: argparse.ArgumentParser) -> None:
     """
@@ -205,16 +210,20 @@ def _add_post_summary_command(subparsers) -> None:
 
 def cli_run_from_yaml(
     ns: argparse.Namespace,
-) -> None:
+) -> int:
     """
     Run multiple jobs from a yaml config file with optional command line overrides.
+
+    Returns the process exit code: non-zero if any job failed, so a wrapper
+    script or CI step does not read a failed batch as a success.
     """
-    run_from_config(ns.config, run_overrides=_apply_run_overrides(ns))
+    result = run_from_config(ns.config, run_overrides=_apply_run_overrides(ns))
+    return EXIT_OK if result.ok else EXIT_JOB_FAILED
 
 
 def cli_post_summary_from_yaml(
     ns: argparse.Namespace,
-) -> None:
+) -> int:
     """
     Summarise existing e.g. *_timeseries.json files by reading a yaml file that lists:
       - post_base_path
@@ -225,6 +234,7 @@ def cli_post_summary_from_yaml(
         post_overrides=_apply_post_summary_overrides(ns),
         all_runs_summary_path=ns.all_runs_summary_path,
     )
+    return EXIT_OK
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -241,10 +251,10 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def main():
+def main() -> None:
     parser = build_parser()
     args = parser.parse_args()
-    args.func(args)
+    raise SystemExit(args.func(args))
 
 
 if __name__ == "__main__":

@@ -1,3 +1,4 @@
+import sys
 from pathlib import Path
 
 import pytest
@@ -5,6 +6,8 @@ import pytest
 from access.esmf_trace import batch_runs
 from access.esmf_trace.batch_runs import (
     RUN_SETTINGS_SUFFIX,
+    BatchResult,
+    JobFailure,
     _changed_settings,
     _display_path,
     _output_fingerprint,
@@ -12,6 +15,8 @@ from access.esmf_trace.batch_runs import (
     run_batch_jobs,
 )
 from access.esmf_trace.config import DefaultSettings, RunSettings
+from access.esmf_trace.main import build_parser, cli_run_from_yaml, main
+from access.esmf_trace.tmp_yaml_parser import write_yaml
 
 
 class _SerialFuture:
@@ -352,3 +357,120 @@ class TestReprocessOnChangedSettings:
         self._run(tmp_path, archive, max_depth=6)
 
         assert len(calls) == 1
+
+
+class TestBatchResult:
+    """
+    run_batch_jobs used to return None, so a total failure was indistinguishable
+    from success to anything but a human reading stdout.
+    """
+
+    def _run(self, tmp_path, archive, n_runs=1, **defaults_kwargs):
+        defaults = DefaultSettings(post_base_path=str(tmp_path / "post"), **defaults_kwargs)
+        runs = [RunSettings(base_prefix=f"p{i}", exact_path=archive) for i in range(n_runs)]
+        return run_batch_jobs(defaults, runs)
+
+    def test_all_succeed(self, tmp_path, archive, serial_pool, writing_run):
+        result = self._run(tmp_path, archive, n_runs=2)
+
+        assert result == BatchResult(n_ok=2, n_fail=0, failures=[])
+        assert result.ok
+
+    def test_all_fail(self, tmp_path, archive, serial_pool, monkeypatch):
+        monkeypatch.setattr(batch_runs, "single_run", lambda ns: (1, "Failed: bt2 blew up"))
+
+        result = self._run(tmp_path, archive, n_runs=2)
+
+        assert result.n_ok == 0
+        assert result.n_fail == 2
+        assert not result.ok
+        assert sorted(f.label for f in result.failures) == [
+            "postprocessing_p0/output000",
+            "postprocessing_p1/output000",
+        ]
+        assert all(f.message == "Failed: bt2 blew up" for f in result.failures)
+
+    def test_partial_failure_is_not_ok(self, tmp_path, archive, serial_pool, monkeypatch):
+        def flaky(ns):
+            if ns.base_prefix == "p1":
+                return (1, "Failed: boom")
+            return _writing_single_run([])(ns)
+
+        monkeypatch.setattr(batch_runs, "single_run", flaky)
+
+        result = self._run(tmp_path, archive, n_runs=2)
+
+        assert (result.n_ok, result.n_fail) == (1, 1)
+        assert not result.ok
+        assert result.failures == [JobFailure("postprocessing_p1/output000", "Failed: boom")]
+
+    def test_worker_exception_is_recorded_as_a_failure(self, tmp_path, archive, serial_pool, monkeypatch):
+        def boom(ns):
+            raise RuntimeError("segfault in bt2")
+
+        monkeypatch.setattr(batch_runs, "single_run", boom)
+
+        result = self._run(tmp_path, archive)
+
+        assert result.n_fail == 1
+        assert result.failures[0].message.startswith("Failed: segfault in bt2")
+
+    def test_nothing_to_do_is_ok(self, tmp_path, archive, serial_pool, writing_run):
+        self._run(tmp_path, archive)
+        result = self._run(tmp_path, archive)
+
+        assert result == BatchResult(n_ok=0, n_fail=0, failures=[])
+        assert result.ok
+
+    def test_failures_are_listed_in_the_summary(self, tmp_path, archive, serial_pool, monkeypatch, capsys):
+        monkeypatch.setattr(batch_runs, "single_run", lambda ns: (1, "Failed: boom"))
+
+        self._run(tmp_path, archive)
+
+        out = capsys.readouterr().out
+        assert "Failed jobs: 1" in out
+        assert "  postprocessing_p0/output000: Failed: boom" in out
+
+
+class TestExitCode:
+    def test_job_failure_exits_non_zero(self, tmp_path, archive, serial_pool, monkeypatch):
+        monkeypatch.setattr(batch_runs, "single_run", lambda ns: (1, "Failed: boom"))
+        cfg = _write_run_config(tmp_path, archive)
+
+        assert cli_run_from_yaml(build_parser().parse_args(["run-from-yaml", "--config", str(cfg)])) == 1
+
+    def test_success_exits_zero(self, tmp_path, archive, serial_pool, writing_run):
+        cfg = _write_run_config(tmp_path, archive)
+
+        assert cli_run_from_yaml(build_parser().parse_args(["run-from-yaml", "--config", str(cfg)])) == 0
+
+    def test_main_propagates_the_code(self, tmp_path, archive, serial_pool, monkeypatch):
+        monkeypatch.setattr(batch_runs, "single_run", lambda ns: (1, "Failed: boom"))
+        cfg = _write_run_config(tmp_path, archive)
+        monkeypatch.setattr(sys, "argv", ["esmf-trace", "run-from-yaml", "--config", str(cfg)])
+
+        with pytest.raises(SystemExit) as excinfo:
+            main()
+
+        assert excinfo.value.code == 1
+
+    def test_main_exits_zero_on_success(self, tmp_path, archive, serial_pool, writing_run, monkeypatch):
+        cfg = _write_run_config(tmp_path, archive)
+        monkeypatch.setattr(sys, "argv", ["esmf-trace", "run-from-yaml", "--config", str(cfg)])
+
+        with pytest.raises(SystemExit) as excinfo:
+            main()
+
+        assert excinfo.value.code == 0
+
+
+def _write_run_config(tmp_path, archive):
+    cfg = tmp_path / "run.yaml"
+    write_yaml(
+        {
+            "default_settings": {"post_base_path": str(tmp_path / "post"), "max_workers": 1},
+            "runs": [{"base_prefix": "p0", "exact_path": str(archive)}],
+        },
+        cfg,
+    )
+    return cfg

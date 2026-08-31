@@ -2,7 +2,7 @@ import re
 from dataclasses import replace
 from pathlib import Path
 
-from .batch_runs import run_batch_jobs
+from .batch_runs import BatchResult, run_batch_jobs
 from .config import DefaultSettings, RunSettings, _norm_pets, load_post_summary_config, load_yaml_config
 from .postprocess import post_summary_from_yaml
 from .utils import normalise_str_list
@@ -11,12 +11,15 @@ from .utils import normalise_str_list
 def run_from_config(
     config_path: str | Path | dict,
     run_overrides: dict | None = None,
-):
+) -> BatchResult:
     """
     Either a yaml path or a dict with the same structure.
 
     run_overrides: optional dict of DefaultSettings field overrides
     e.g. {"stream_prefix": "esmf_stream", "max_workers": 8}
+
+    Returns the batch's BatchResult. Failing jobs do not raise - check
+    `result.ok`, or `result.failures` for which ones and why.
     """
 
     if isinstance(config_path, (str, Path)):
@@ -28,7 +31,7 @@ def run_from_config(
     if run_overrides:
         defaults = replace(defaults, **dict(run_overrides))
 
-    run_batch_jobs(defaults, runs)
+    return run_batch_jobs(defaults, runs)
 
 
 def post_summary_from_config(
