@@ -28,6 +28,42 @@ class _Job:
     fingerprint: dict
 
 
+@dataclass(frozen=True)
+class JobFailure:
+    """
+    A job that did not produce its outputs.
+
+    label: the post dir, relative to the run's post_base_path.
+    message: what the worker reported.
+    """
+
+    label: str
+    message: str
+
+
+@dataclass(frozen=True)
+class BatchResult:
+    """
+    Outcome of a whole batch, returned by run_batch_jobs and run_from_config so
+    a caller can act on failures instead of only reading them off stdout.
+
+    n_ok: jobs that wrote their outputs.
+    n_fail: jobs that did not.
+    failures: one entry per failed job, in completion order.
+
+    Jobs skipped because their outputs were already up to date count towards
+    neither, so a batch with nothing to do is ok with both counts at zero.
+    """
+
+    n_ok: int
+    n_fail: int
+    failures: list[JobFailure]
+
+    @property
+    def ok(self) -> bool:
+        return self.n_fail == 0
+
+
 def _find_traceout_dir(output_dir: Path, stream_prefix: str) -> Path | None:
     """
     Return <outputNNN>/traceout if it exists and holds at least one
@@ -182,7 +218,7 @@ def run_one_job(ns: argparse.Namespace) -> tuple[int, str]:
         return (1, f"Failed: {e}")
 
 
-def run_batch_jobs(defaults: DefaultSettings, runs: list[RunSettings]) -> None:
+def run_batch_jobs(defaults: DefaultSettings, runs: list[RunSettings]) -> BatchResult:
     """
     Expand every run into one job per outputNNN directory, then process the
     jobs in parallel.
@@ -203,6 +239,11 @@ def run_batch_jobs(defaults: DefaultSettings, runs: list[RunSettings]) -> None:
     max_depth or a different model_component regenerates rather than silently
     keeping the old results. Outputs predating that record are still reused on
     sight; defaults.force reprocesses everything regardless.
+
+    Returns a BatchResult. Job failures are reported there rather than raised,
+    so one bad trace does not discard the results of every other job in the
+    batch - it is the caller's job to turn a non-empty `failures` into an exit
+    code or an exception.
     """
 
     max_workers = defaults.max_workers or (psutil.cpu_count(logical=False) or 1)
@@ -248,12 +289,12 @@ def run_batch_jobs(defaults: DefaultSettings, runs: list[RunSettings]) -> None:
 
     if not jobs:
         print("-- No jobs to run. All done or nothing to do.")
-        return
+        return BatchResult(n_ok=0, n_fail=0, failures=[])
 
     print(f"-- Running {len(jobs)} jobs with up to {max_workers} parallel workers...")
 
     n_ok = 0
-    n_fail = 0
+    failures: list[JobFailure] = []
 
     with ProcessPoolExecutor(max_workers=max_workers) as exe:
         tmp_jobs = {exe.submit(run_one_job, job.ns): job for job in jobs}
@@ -262,7 +303,7 @@ def run_batch_jobs(defaults: DefaultSettings, runs: list[RunSettings]) -> None:
             try:
                 ret, msg = tmp.result()
             except Exception as e:
-                n_fail += 1
+                failures.append(JobFailure(job.label, f"EXCEPTION: {e}"))
                 print(f"[{job.label}] EXCEPTION: {e}")
             else:
                 if ret == 0:
@@ -274,10 +315,14 @@ def run_batch_jobs(defaults: DefaultSettings, runs: list[RunSettings]) -> None:
                     except OSError as e:
                         print(f"[{job.label}] warning: could not record run settings: {e}")
                 else:
-                    n_fail += 1
+                    failures.append(JobFailure(job.label, msg))
                 print(f"[{job.label}] {msg}")
 
     print("\n")
     print("=== Summary ===")
     print(f"Successful jobs: {n_ok}")
-    print(f"Failed jobs: {n_fail}")
+    print(f"Failed jobs: {len(failures)}")
+    for failure in failures:
+        print(f"  {failure.label}: {failure.message}")
+
+    return BatchResult(n_ok=n_ok, n_fail=len(failures), failures=failures)
