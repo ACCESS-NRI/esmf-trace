@@ -189,21 +189,18 @@ Search is combined with the current phase/region and stack-depth selections.
 
 For example, searching for:
 
-![flame_graph_search](/assets/flame_graph_search.png){: loading="lazy" }
-
 ```text
 IPDv03p1
 ```
 
-can match more than one component if that phase exists in several components.
-Use the phase menu to distinguish entries such as:
+can match more than one component if that phase exists in several components. Use the phase menu to distinguish entries such as:
 
 ```text
 OCN · IPDv03p1
 MED · IPDv03p1
 ```
 
-Searching does not change the X-axis range.
+![flame_graph_search](/assets/flame_graph_search.png){: loading="lazy" }
 
 ## Hover information
 
@@ -248,17 +245,16 @@ Within a phase/region selection, multiple selected leaves are combined with
 
 For example:
 
-![flame_graph_ocn_ice](/assets/flame_graph_ocn_ice.png){: loading="lazy" }
-
 ```text
 Regions: OCN · RunPhase1 OR ICE · RunPhase1
 Depths:  2 OR 3
 Search:  RunPhase
 ```
-
 shows regions satisfying all three filter dimensions.
 
-Filtering changes region visibility in a single Plotly update and does not rebuild the span data or modify the current X-axis zoom.
+![flame_graph_ocn_ice](/assets/flame_graph_ocn_ice.png){: loading="lazy" }
+
+Filtering changes region visibility in a single `Plotly` update and does not rebuild the span data or modify the current X-axis zoom.
 
 ## Interpreting the flame graph
 
