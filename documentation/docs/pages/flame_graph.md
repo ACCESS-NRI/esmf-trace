@@ -16,7 +16,7 @@ The HTML is self-contained, including `Plotly`, so it can be copied elsewhere an
 
 The screenshot below shows the default ESMF Trace Explorer layout.
 
-![flame-graph-demonstration](asset/flame_graph_demonstration.png){: loading="lazy" }
+![flame-graph-demonstration](/assets/flame_graph_demonstration.png){: loading="lazy" }
 
 From top to bottom, the page is organised into four main areas:
 
