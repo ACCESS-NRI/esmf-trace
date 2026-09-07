@@ -114,6 +114,8 @@ MED -> ICE
 ICE -> MED
 ```
 
+![flame_graph_hover](/assets/flame_graph_hover.png){: loading="lazy" }
+
 A partially selected group is shown with a partial state and a count of the selected entries.
 
 The detailed selector also contains a search box. This search only filters the options displayed in that menu; it does not itself change the flame graph until a region is selected.
@@ -127,8 +129,7 @@ The **Stack depth** row is independent from the phase/region selection.
 
 In the screenshot, this is the second selector row, directly above the plot. Its chips decide which `Depth N · PET M` rows appear on the Y axis.
 
-`ALL` displays every available stack depth. Selecting one or more numbered
-depths displays only those Y-axis rows.
+`ALL` displays every available stack depth. Selecting one or more numbered depths displays only those Y-axis rows.
 
 For example:
 
@@ -139,7 +140,11 @@ Stack depth: 3
 
 shows only matching `OCN · IPDv03p1` regions at depth 3.
 
-If the selected phase/region does not exist at the selected depth, no bar is shown.
+![flame_graph_filter_depth](/assets/flame_graph_filter_depth.png){: loading="lazy" }
+
+If the selected phase/region does not exist at the selected depth, no bar is shown, and is shown with the message below,
+
+![flame_graph_no_region](/assets/flame_graph_no_region.png){: loading="lazy" }
 
 !!! tip "Only the depth selector changes the Y-axis rows"
     Selecting a phase or region does **not** collapse the Y axis to the depths where that region happens to exist. With `Stack depth: ALL`, the complete stack-depth/PET domain remains visible even if the selected region only occurs at one depth.
@@ -157,7 +162,7 @@ Use the `Plotly` zoom controls, drag across the plot, or scroll within the timel
 
 It does **not** clear the current phase, region, depth or text filters.
 
-For example, if only `OCN · IPDv03p1` and depth 3 are selected, clicking `Reset view` shows:
+For example, if only `OCN · IPDv03p1` and depth `3` are selected, clicking `Reset view` shows:
 
 ```text
 X: complete original trace time range
@@ -183,6 +188,8 @@ The search box at the top of the explorer filters the plotted regions using:
 Search is combined with the current phase/region and stack-depth selections.
 
 For example, searching for:
+
+![flame_graph_search](/assets/flame_graph_search.png){: loading="lazy" }
 
 ```text
 IPDv03p1
@@ -214,6 +221,8 @@ Hover over a timing span to inspect its full provenance. The explorer shows:
 The full hierarchical path is kept even when the same phase is presented under
 a shorter selector such as `OCN · RunPhase1`.
 
+![flame_graph_hover_region](/assets/flame_graph_hover_region.png){: loading="lazy" }
+
 ## Colours and region boundaries
 
 Colours are assigned to the detailed phase/region selectors rather than only to the broad group. Different regions therefore remain distinguishable even when they belong to the same component or phase group.
@@ -239,6 +248,8 @@ Within a phase/region selection, multiple selected leaves are combined with
 
 For example:
 
+![flame_graph_ocn_ice](/assets/flame_graph_ocn_ice.png){: loading="lazy" }
+
 ```text
 Regions: OCN · RunPhase1 OR ICE · RunPhase1
 Depths:  2 OR 3
@@ -247,13 +258,11 @@ Search:  RunPhase
 
 shows regions satisfying all three filter dimensions.
 
-Filtering changes region visibility in a single Plotly update and does not
-rebuild the span data or modify the current X-axis zoom.
+Filtering changes region visibility in a single Plotly update and does not rebuild the span data or modify the current X-axis zoom.
 
 ## Interpreting the flame graph
 
-The flame graph is useful for understanding **when** work occurs and how timing
-regions are nested.
+The flame graph is useful for understanding **when** work occurs and how timing regions are nested.
 
 Typical uses include:
 
@@ -276,8 +285,7 @@ Large ESMF traces can contain tens of thousands of spans and hundreds of logical
 - the legend is replaced by the phase-first selector; and
 - one Plotly update is used for each filtering interaction.
 
-This keeps the HTML substantially smaller and the interactive filtering more
-responsive than rendering hundreds of traditional legend entries.
+This keeps the HTML substantially smaller and the interactive filtering more responsive than rendering hundreds of traditional legend entries.
 
 ## Library usage
 
