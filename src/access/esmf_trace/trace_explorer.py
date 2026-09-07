@@ -397,7 +397,8 @@ button,input{font:inherit}
 #filters{height:116px;padding:8px 18px 10px;background:linear-gradient(#fff,#fbfcff);display:flex;flex-direction:column;justify-content:center;gap:9px}.filter{display:grid;grid-template-columns:215px minmax(0,1fr);align-items:center;gap:10px}.filter h4{font-size:11px;margin:0;color:#344054}.filter p{font-size:9.3px;color:#7d8798;margin:2px 0 0;line-height:1.3}.chips{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
 .chip{height:29px;border:1px solid #dfe4ec;border-radius:8px;background:#fff;color:#475467;padding:0 9px;font-size:10px;cursor:pointer;display:inline-flex;align-items:center;gap:6px}.chip .label:before{content:"";display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--c,#667085);margin-right:6px}.chip.depth .label:before{display:none}.chip.active{font-weight:720;color:#101828;border-color:var(--c,#4f46e5);background:color-mix(in srgb,var(--c,#4f46e5) 11%,white)}.chip.partial{font-weight:700;border-color:var(--c,#4f46e5);background:repeating-linear-gradient(135deg,#fff,#fff 5px,color-mix(in srgb,var(--c,#4f46e5) 9%,white) 5px,color-mix(in srgb,var(--c,#4f46e5) 9%,white) 10px)}.chip .count{font-size:8px;border-left:1px solid #e4e7ec;padding-left:5px;color:#667085}.chev{font-size:9px;color:#7d8798}
 #plot{position:absolute;top:var(--header);bottom:0;left:0;right:0}#empty{position:absolute;z-index:8;left:50%;top:55%;transform:translate(-50%,-50%);display:none;background:#fff;border:1px dashed #cdd4df;border-radius:10px;padding:12px 15px;color:#667085;font-size:11px}
-#popover{position:fixed;z-index:45;display:none;flex-direction:column;max-height:min(520px,calc(100vh - 80px));background:#fff;border:1px solid #dfe4ec;border-radius:14px;box-shadow:0 20px 50px rgba(16,24,40,.16);overflow:hidden}#popover.open{display:flex}.phead{display:flex;align-items:center;gap:10px;padding:12px 14px;border-bottom:1px solid #edf0f4}.ptitle{min-width:155px}.ptitle b{display:block;font-size:11.5px}.ptitle small{display:block;font-size:9px;color:#7d8798;margin-top:2px;max-width:300px}.phead input{flex:1;height:32px;border:1px solid var(--line);border-radius:8px;padding:0 9px;font-size:10px;outline:none}#pop-body{overflow:auto;padding:6px 14px 14px}.section{padding:9px 0}.section+.section{border-top:1px solid #edf0f4}.section-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:7px}.section-name{font-size:10.5px;font-weight:760}.section-all{border:0;background:transparent;color:#4f46e5;font-size:9px;cursor:pointer}.leaf-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px}.leaf{height:48px;min-width:0;border:1px solid #e1e5ec;border-radius:7px;background:#fff;color:#475467;font-size:9.2px;display:flex;align-items:flex-start;gap:7px;padding:6px 8px;cursor:pointer;text-align:left}.leaf:before{content:"";width:7px;height:7px;flex:0 0 auto;border-radius:50%;background:var(--c,#667085);margin-top:4px}.leaf-copy{display:flex;flex-direction:column;align-items:flex-start;gap:2px;min-width:0;overflow:hidden}.leaf-name{display:block;width:100%;font-size:10.5px;font-weight:650;color:#344054;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.leaf-desc{display:block;width:100%;font-size:9px;font-weight:450;line-height:1.2;color:#7a8495;white-space:normal;overflow:hidden}.leaf.active{border-color:var(--c,#4f46e5);background:color-mix(in srgb,var(--c,#4f46e5) 10%,white)}.leaf.active .leaf-name{color:#101828}
+#popover{position:fixed;z-index:45;display:none;flex-direction:column;max-height:min(520px,calc(100vh - 80px));background:#fff;border:1px solid #dfe4ec;border-radius:14px;box-shadow:0 20px 50px rgba(16,24,40,.16);overflow:hidden}#popover.open{display:flex}.phead{display:flex;align-items:center;gap:10px;padding:12px 14px;border-bottom:1px solid #edf0f4}.ptitle{min-width:155px}.ptitle b{display:block;font-size:11.5px}.ptitle small{display:block;font-size:9px;color:#7d8798;margin-top:2px;max-width:300px}.phead input{flex:1;height:32px;border:1px solid var(--line);border-radius:8px;padding:0 9px;font-size:10px;outline:none}#pop-body{overflow:auto;flex:1;min-height:0;padding:6px 14px 14px}.section{padding:9px 0}.section+.section{border-top:1px solid #edf0f4}.section-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:7px}.section-name{font-size:10.5px;font-weight:760}.section-all{border:0;background:transparent;color:#4f46e5;font-size:9px;cursor:pointer}.leaf-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px}.leaf{height:58px;min-width:0;border:1px solid #e1e5ec;border-radius:7px;background:#fff;color:#475467;font-size:9.2px;display:flex;align-items:flex-start;gap:7px;padding:6px 8px;cursor:pointer;text-align:left}.leaf:before{content:"";width:7px;height:7px;flex:0 0 auto;border-radius:50%;background:var(--c,#667085);margin-top:4px}.leaf-copy{display:flex;flex-direction:column;align-items:flex-start;gap:2px;min-width:0;overflow:hidden}.leaf-name{display:block;width:100%;font-size:10.5px;font-weight:650;color:#344054;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.leaf-desc{display:-webkit-box;width:100%;font-size:9px;font-weight:450;line-height:1.25;color:#7a8495;white-space:normal;overflow:hidden;-webkit-line-clamp:2;-webkit-box-orient:vertical}.leaf.active{border-color:var(--c,#4f46e5);background:color-mix(in srgb,var(--c,#4f46e5) 10%,white)}.leaf.active .leaf-name{color:#101828}
+#leaf-preview{display:none;flex:0 0 auto;border-top:1px solid #e6eaf0;background:#f8fafc;padding:10px 14px 11px}#leaf-preview.show{display:block}.preview-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:3px}.preview-kicker{font-size:8.5px;font-weight:760;letter-spacing:.045em;text-transform:uppercase;color:#667085}.preview-state{font-size:8.5px;color:#667085}.preview-name{font-size:10.8px;font-weight:730;color:#27364d;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.preview-desc{font-size:9.6px;line-height:1.35;color:#667085;margin-top:3px;white-space:normal}#leaf-tooltip{position:fixed;z-index:70;display:none;pointer-events:none;max-width:390px;padding:8px 10px;border-radius:8px;background:rgba(17,24,39,.96);color:#fff;box-shadow:0 10px 28px rgba(17,24,39,.22)}#leaf-tooltip.show{display:block}#leaf-tooltip b{display:block;font-size:10px;line-height:1.25;margin-bottom:3px}#leaf-tooltip span{display:block;font-size:9.2px;line-height:1.35;color:#e5e7eb}
 #inspector{position:absolute;left:16px;bottom:14px;z-index:12;max-width:min(820px,72vw);background:rgba(17,24,39,.93);color:#fff;border-radius:10px;padding:8px 11px;opacity:0;pointer-events:none;transition:opacity .1s}#inspector.show{opacity:1}#inspect-path{font-size:10.5px;font-weight:620;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}#inspect-meta{font-size:9.5px;color:#d0d5dd;margin-top:3px}
 @media(max-width:1120px){.stats{display:none}.filter{grid-template-columns:180px minmax(0,1fr)}.leaf-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 """
@@ -417,6 +418,7 @@ const activeLeaves=new Set();
 const activeDepths=new Set();
 let searchQuery="";
 let currentPopoverGroup=null;
+let pinnedPreviewLeaf=null;
 let openTimer=null,closeTimer=null;
 // Keep the original X domain separate from Plotly's mutable layout objects.
 // Plotly may mutate layout.xaxis.range during zoom/pan, so never pass P.fullX
@@ -496,10 +498,40 @@ function refreshControls(){
 }
 
 const pop=document.getElementById("popover"),popBody=document.getElementById("pop-body"),popSearch=document.getElementById("pop-search");
+const leafPreview=document.getElementById("leaf-preview"),previewKicker=document.getElementById("preview-kicker"),previewState=document.getElementById("preview-state"),previewName=document.getElementById("preview-name"),previewDesc=document.getElementById("preview-desc"),leafTooltip=document.getElementById("leaf-tooltip"),leafTooltipName=document.getElementById("leaf-tooltip-name"),leafTooltipDesc=document.getElementById("leaf-tooltip-desc");
 pop.onmouseenter=()=>clearTimeout(closeTimer);pop.onmouseleave=()=>{closeTimer=setTimeout(closePopover,330)};pop.onclick=ev=>ev.stopPropagation();
 function positionPopover(anchor){const r=anchor.getBoundingClientRect(),width=Math.min(780,window.innerWidth-32);const left=Math.max(16,Math.min(r.left,window.innerWidth-width-16));const top=Math.min(r.bottom+6,window.innerHeight-220);pop.style.left=`${left}px`;pop.style.top=`${top}px`;pop.style.width=`${width}px`}
 function openPopover(group,anchor){clearTimeout(closeTimer);currentPopoverGroup=group;positionPopover(anchor);document.getElementById("pop-title").textContent=GROUP_LABEL[group];document.getElementById("pop-sub").textContent=P.groupHelp[group]||"Select the whole group or individual regions.";popSearch.value="";renderPopover(group,"");pop.classList.add("open")}
-function closePopover(){pop.classList.remove("open");currentPopoverGroup=null}
+function leafDisplayLabel(info){return info.group==="Mediator"?info.label:`${info.component} · ${info.label}`}
+function hideLeafPreview(){leafPreview.classList.remove("show");previewName.textContent="";previewDesc.textContent="";previewState.textContent=""}
+function showLeafPreview(leaf,pinned=false){
+  const info=P.leafInfo[leaf];if(!info)return;
+  previewKicker.textContent=pinned?"Selected region":"Region details";
+  previewState.textContent=pinned?"Pinned until another region is selected":"Hover preview";
+  previewName.textContent=leafDisplayLabel(info);
+  previewDesc.textContent=info.description||"No description available.";
+  leafPreview.classList.add("show");
+}
+function restoreLeafPreview(){
+  if(pinnedPreviewLeaf&&activeLeaves.size>0&&activeLeaves.has(pinnedPreviewLeaf)&&P.leafInfo[pinnedPreviewLeaf]?.group===currentPopoverGroup){
+    showLeafPreview(pinnedPreviewLeaf,true);
+  }else{pinnedPreviewLeaf=null;hideLeafPreview()}
+}
+function positionLeafTooltip(ev){
+  const pad=12,offset=14,w=leafTooltip.offsetWidth,h=leafTooltip.offsetHeight;
+  let left=ev.clientX+offset,top=ev.clientY+offset;
+  if(left+w>window.innerWidth-pad)left=ev.clientX-w-offset;
+  if(top+h>window.innerHeight-pad)top=ev.clientY-h-offset;
+  leafTooltip.style.left=`${Math.max(pad,left)}px`;leafTooltip.style.top=`${Math.max(pad,top)}px`;
+}
+function showLeafTooltip(ev,leaf){
+  const info=P.leafInfo[leaf];if(!info)return;
+  leafTooltipName.textContent=leafDisplayLabel(info);
+  leafTooltipDesc.textContent=info.description||"No description available.";
+  leafTooltip.classList.add("show");positionLeafTooltip(ev);
+}
+function hideLeafTooltip(){leafTooltip.classList.remove("show")}
+function closePopover(){pop.classList.remove("open");currentPopoverGroup=null;pinnedPreviewLeaf=null;hideLeafPreview();hideLeafTooltip()}
 document.addEventListener("click",closePopover);document.addEventListener("keydown",ev=>{if(ev.key==="Escape")closePopover()});popSearch.oninput=()=>{if(currentPopoverGroup)renderPopover(currentPopoverGroup,popSearch.value)};
 
 function renderPopover(group,filterText){
@@ -517,10 +549,22 @@ function renderPopover(group,filterText){
       refreshControls();scheduleUpdate();renderPopover(group,filterText);
     };
     for(const leaf of leaves){
-      const info=P.leafInfo[leaf],b=document.createElement("button");b.className="leaf";b.dataset.leaf=leaf;b.style.setProperty("--c",P.leafColors[leaf]);b.title=`${info.component} · ${info.label}`;
-      const displayLabel=group==="Mediator"?info.label:`${info.component} · ${info.label}`;
+      const info=P.leafInfo[leaf],b=document.createElement("button");b.className="leaf";b.dataset.leaf=leaf;b.style.setProperty("--c",P.leafColors[leaf]);
+      const displayLabel=leafDisplayLabel(info);
+      b.setAttribute("aria-label",`${displayLabel}. ${info.description||""}`);
       b.innerHTML=`<span class="leaf-copy"><span class="leaf-name">${displayLabel}</span><span class="leaf-desc">${info.description||""}</span></span>`;
-      b.onclick=()=>{if(activeLeaves.size===0)activeLeaves.add(leaf);else if(activeLeaves.has(leaf)){activeLeaves.delete(leaf);if(activeLeaves.size===0)activeLeaves.clear()}else activeLeaves.add(leaf);refreshControls();scheduleUpdate();renderPopover(group,filterText)};
+      b.onmouseenter=ev=>{showLeafPreview(leaf,false);showLeafTooltip(ev,leaf)};
+      b.onmousemove=positionLeafTooltip;
+      b.onmouseleave=()=>{hideLeafTooltip();restoreLeafPreview()};
+      b.onfocus=()=>showLeafPreview(leaf,false);
+      b.onblur=restoreLeafPreview;
+      b.onclick=()=>{
+        if(activeLeaves.size===0)activeLeaves.add(leaf);
+        else if(activeLeaves.has(leaf)){activeLeaves.delete(leaf);if(activeLeaves.size===0)activeLeaves.clear()}
+        else activeLeaves.add(leaf);
+        pinnedPreviewLeaf=activeLeaves.size>0&&activeLeaves.has(leaf)?leaf:null;
+        refreshControls();scheduleUpdate();renderPopover(group,filterText);restoreLeafPreview();
+      };
       grid.appendChild(b);
     }
     popBody.appendChild(section);
@@ -572,7 +616,7 @@ async function applyResetView(){
 }
 
 document.getElementById("global-search").oninput=ev=>{searchQuery=ev.target.value;scheduleUpdate()};
-document.getElementById("clear").onclick=()=>{activeLeaves.clear();activeDepths.clear();searchQuery="";document.getElementById("global-search").value="";refreshControls();scheduleUpdate()};
+document.getElementById("clear").onclick=()=>{activeLeaves.clear();activeDepths.clear();searchQuery="";pinnedPreviewLeaf=null;document.getElementById("global-search").value="";hideLeafPreview();hideLeafTooltip();refreshControls();scheduleUpdate()};
 document.getElementById("reset").onclick=scheduleResetView;
 
 const layout={
@@ -611,7 +655,8 @@ TRACE_EXPLORER_TEMPLATE = Template(r"""<!doctype html>
   </div>
 </div>
 <div id="plot"></div><div id="empty">No timing regions match the current phase/component/depth selection.</div>
-<div id="popover"><div class="phead"><div class="ptitle"><b id="pop-title"></b><small id="pop-sub"></small></div><input id="pop-search" placeholder="Search this group..."></div><div id="pop-body"></div></div>
+<div id="popover"><div class="phead"><div class="ptitle"><b id="pop-title"></b><small id="pop-sub"></small></div><input id="pop-search" placeholder="Search this group..."></div><div id="pop-body"></div><div id="leaf-preview" aria-live="polite"><div class="preview-head"><span class="preview-kicker" id="preview-kicker">Region details</span><span class="preview-state" id="preview-state"></span></div><div class="preview-name" id="preview-name"></div><div class="preview-desc" id="preview-desc"></div></div></div>
+<div id="leaf-tooltip" role="tooltip"><b id="leaf-tooltip-name"></b><span id="leaf-tooltip-desc"></span></div>
 <div id="inspector"><div id="inspect-path"></div><div id="inspect-meta"></div></div>
 <script>$plotly_js</script>
 <script>$javascript</script>

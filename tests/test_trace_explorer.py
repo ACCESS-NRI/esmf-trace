@@ -104,30 +104,26 @@ def test_plot_writes_explorer_and_preserves_region_count(tmp_path: Path):
 
     assert '"regionCount":2' in text
     assert '"spanCount":3' in text
-
     assert "Initialisation" in text
     assert "Coupling" in text
     assert "Reset view" in text
 
-    # Keep an immutable copy of the original full X domain. Plotly receives
-    # its own copy so zooming cannot mutate the range used by Reset view.
+    # Reset-view contract.
     assert "const FULL_X=Object.freeze(P.fullX.slice())" in text
     assert "range:FULL_X.slice()" in text
-
-    # Reset view explicitly restores both ends of the original X range.
     assert '"xaxis.range[0]":FULL_X[0]' in text
     assert '"xaxis.range[1]":FULL_X[1]' in text
-
-    # Y remains controlled by the depth selector and is not mouse-zoomable.
     assert "fixedrange:true" in text
-
-    # Native Plotly reset/autoscale are removed because Reset view has
-    # explorer-specific semantics.
     assert 'modeBarButtonsToRemove:["autoScale2d","resetScale2d"' in text
-
-    # Plot mutations are serialized so a pending filter update cannot race
-    # with Reset view and overwrite the restored X range.
     assert "plotOperationRunning" in text
     assert "runPlotOperations" in text
     assert "Filtering changes visibility/Y rows only and never touches the X range" in text
     assert 'document.getElementById("reset").onclick=scheduleResetView' in text
+
+    # Region descriptions remain compact in cards but are fully readable.
+    assert "-webkit-line-clamp:2" in text
+    assert 'id="leaf-preview"' in text
+    assert 'id="leaf-tooltip"' in text
+    assert "showLeafPreview" in text
+    assert "showLeafTooltip" in text
+    assert 'b.setAttribute("aria-label"' in text
