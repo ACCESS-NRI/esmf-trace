@@ -31,8 +31,8 @@ class DefaultSettings:
     max_depth: drop trace regions nested deeper than this.
     merge_adjacent, merge_gap_ns: merge consecutive spans of the same component
         separated by no more than merge_gap_ns nanoseconds.
-    xaxis_datetime, separate_plots, cmap, renderer, show_html: flame graph
-        options, passed straight through to plot_flame_graph.
+    xaxis_datetime: use absolute timestamps on the flame-graph X axis
+        instead of elapsed seconds.
     """
 
     post_base_path: str | None = None
@@ -40,10 +40,6 @@ class DefaultSettings:
     model_component: str | list[str] = "[ESMF]/[ensemble] RunPhase1/[ESM0001] RunPhase1"
     max_workers: int | None = None
     xaxis_datetime: bool = False
-    separate_plots: bool = False
-    cmap: str = "tab10"
-    renderer: str = "browser"
-    show_html: bool = False
     max_depth: int = 6
     merge_adjacent: bool = False
     merge_gap_ns: int = 1000
@@ -190,10 +186,6 @@ class RunSettings:
             "max_depth": defaults.max_depth,
             "stream_prefix": defaults.stream_prefix,
             "xaxis_datetime": defaults.xaxis_datetime,
-            "separate_plots": defaults.separate_plots,
-            "cmap": defaults.cmap,
-            "renderer": defaults.renderer,
-            "show_html": defaults.show_html,
         }
 
 

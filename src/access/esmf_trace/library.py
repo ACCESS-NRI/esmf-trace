@@ -70,10 +70,6 @@ class ACCESSRunConfigBuilder:
     DEFAULT_SETTINGS: dict = {
         "stream_prefix": "esmf_stream",
         "xaxis_datetime": False,
-        "separate_plots": False,
-        "cmap": "tab10",
-        "renderer": "browser",
-        "show_html": False,
     }
 
     def __init__(

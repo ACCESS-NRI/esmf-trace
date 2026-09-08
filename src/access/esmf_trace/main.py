@@ -50,26 +50,6 @@ def _add_run_overrides(parser: argparse.ArgumentParser) -> None:
         help="Override to enable datetime x-axis in flame graph from config (default: False)",
     )
     arg.add_argument(
-        "--separate-plots",
-        action="store_true",
-        help="Override to enable separate flame graph plots per pet from config (default: False)",
-    )
-    arg.add_argument(
-        "--cmap",
-        type=str,
-        help="Override the matplotlib colormap for flame graph from config (default: tab10)",
-    )
-    arg.add_argument(
-        "--renderer",
-        type=str,
-        help="Override the plotly renderer for flame graph from config (default: browser)",
-    )
-    arg.add_argument(
-        "--show-html",
-        action="store_true",
-        help="Override to open the flame graph html in a browser after generation (default: False)",
-    )
-    arg.add_argument(
         "--max-workers",
         type=int,
         help="Override the maximum number of workers for parallel processing from config (default: number of CPUs)",
