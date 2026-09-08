@@ -20,8 +20,8 @@ The screenshot below shows the default ESMF Trace Explorer layout.
 
 From top to bottom, the page is organised into four main areas:
 
-1. Header and tools - the search box, region counter, `Clear filters`, and `Reset View`.
-2. Phase / region group selector - broad lifestyle groups such as `Initialisation`, `RunPhase`, `Finalisation`, `Mediator`, `Coupling` and `Framework`.
+1. Header and tools - the search box, region counter, `Clear filters`, and `Reset view`.
+2. Phase / region group selector - broad lifestyle groups such as `Initialisation`, `Run phase`, `Finalisation`, `Mediator`, `Coupling` and `Framework`.
 3. Stack depth selector - depths chips used to decide which depth / PET rows appear on the Y axis.
 4. With the default time axis, the first event starts at `0` and the X axis is `Elapsed time (s)`.
 5. Timeline plot - the actual flame graph, where each horizontal bar is a timing span plotted against elapsed time.
