@@ -15,9 +15,8 @@ from .utils import extract_index_list_from_str, output_name_to_index
 RUN_SETTINGS_SUFFIX = "_run_settings.json"
 
 # Job kwargs that do not change what lands on disk, so a difference in them is
-# no reason to reprocess: post_dir is the location itself, and show_html only
-# decides whether a browser is opened afterwards.
-_FINGERPRINT_EXCLUDED = frozenset({"post_dir", "show_html"})
+# no reason to reprocess: post_dir is the output location itself.
+_FINGERPRINT_EXCLUDED = frozenset({"post_dir"})
 
 
 @dataclass(frozen=True)
