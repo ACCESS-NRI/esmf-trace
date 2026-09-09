@@ -99,7 +99,7 @@ class TestUnknownKeyRejection:
         with pytest.raises(ConfigError, match="valid keys:.*include_combined"):
             parse_post_summary_config(data)
 
-    @pytest.mark.parametrize("key", ["stream_prefix", "cmap", "max_depth", "renderer"])
+    @pytest.mark.parametrize("key", ["stream_prefix", "max_depth"])
     def test_run_config_keys_are_rejected_not_silently_ignored(self, key):
         # these mean something in a run config but nothing here; accepting
         # them would imply they have an effect.

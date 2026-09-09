@@ -1,172 +1,113 @@
 from pathlib import Path
 
 import pandas as pd
-import plotly.express as px
 import plotly.graph_objects as go
-import plotly.io as pio
-from matplotlib import colormaps
-from plotly.subplots import make_subplots
 
 from .common_vars import seconds_to_nanoseconds
+from .trace_explorer import annotate_selector_columns, write_trace_explorer_html
+
+
+def _prepare_flame_data(
+    df: pd.DataFrame,
+    pets: int | list[int] | None,
+    xaxis_datetime: bool,
+) -> tuple[pd.DataFrame, list[int]]:
+    if "pet" not in df.columns:
+        df = df.assign(pet=0)
+
+    if pets is None:
+        selected_pets = sorted(int(pet) for pet in df["pet"].unique())
+    elif isinstance(pets, int):
+        selected_pets = [pets]
+    else:
+        selected_pets = [int(pet) for pet in pets]
+
+    out = df[df["pet"].isin(selected_pets)].copy()
+    if out.empty:
+        raise ValueError("no data for the selected pets")
+
+    out = annotate_selector_columns(out)
+    # Derive the displayed duration from the recorded timestamps so the
+    # hover values always satisfy: duration = end - start.
+    out["duration_seconds"] = (out["end"] - out["start"]) / seconds_to_nanoseconds
+
+    if xaxis_datetime:
+        out["x_start"] = pd.to_datetime(out["start"], unit="ns")
+        out["x_end"] = pd.to_datetime(out["end"], unit="ns")
+        # Plotly date-axis bar widths are milliseconds.
+        out["width"] = (out["end"] - out["start"]) / 1_000_000
+    else:
+        origin_ns = out["start"].min()
+        out["x_start"] = (out["start"] - origin_ns) / seconds_to_nanoseconds
+        out["x_end"] = (out["end"] - origin_ns) / seconds_to_nanoseconds
+        out["width"] = out["duration_seconds"]
+
+    out["y_cat"] = [f"depth{int(depth)}_pet_{int(pet)}" for depth, pet in zip(out["depth"], out["pet"], strict=True)]
+    return out, selected_pets
 
 
 def plot_flame_graph(
     df: pd.DataFrame,
-    pets: int | list | None = None,
+    pets: int | list[int] | None = None,
     xaxis_datetime: bool = False,
-    separate_plots: bool = False,
-    cmap_name: str = "tab20",
-    renderer: str | None = None,
-    show_html: bool = False,
     html_path: Path | None = None,
 ):
     """
     Interactive flame graph for one or more pets.
     """
+    plot_df, _ = _prepare_flame_data(df, pets, xaxis_datetime)
 
-    if "pet" not in df.columns:
-        df = df.assign(pet=0)
-
-    if pets is None:
-        pets = sorted(df["pet"].unique())
-    elif isinstance(pets, int):
-        pets = [pets]
-
-    df = df[df["pet"].isin(pets)].copy()
-    if df.empty:
-        raise ValueError("no data for the selected pets")
-
-    components = sorted(df["model_component"].unique())
-    cmap = colormaps.get_cmap(cmap_name).resampled(len(components))
-    colours = {
-        c: f"rgb({int(r * 255)},{int(g * 255)},{int(b * 255)})"
-        for c, (r, g, b, _) in zip(components, cmap(range(len(components))), strict=True)
-    }
-
-    # yaxis categories
-    multi_overlay = (not separate_plots) and (len(pets) > 1)
-    yaxis_kwargs = {}
-    cat_order = None
-
-    if multi_overlay:
-        pet_index = {p: i for i, p in enumerate(sorted(pets))}
-        df["y_cat"] = [f"depth{d}_pet_{p}" for d, p in zip(df["depth"], df["pet"], strict=True)]
-        df["__order"] = df["depth"] * len(pets) + df["pet"].map(pet_index)
-        cat_order = df.sort_values("__order")["y_cat"].unique().tolist()
-        y_col = y_hover_col = "y_cat"
-        yaxis_kwargs = {"categoryorder": "array", "categoryarray": cat_order}
-    else:
-        y_col = y_hover_col = "depth"
-        yaxis_kwargs = {"autorange": "reversed"}
-
-    # xaxis columns
-    if xaxis_datetime:
-        df["x_start"] = pd.to_datetime(df["start"], unit="ns")
-        df["x_end"] = pd.to_datetime(df["end"], unit="ns")
-        df["duration_s"] = df["duration_s"] / seconds_to_nanoseconds  # seconds
-    else:
-        origin_ns = df["start"].min()
-        df["x_start"] = (df["start"] - origin_ns) / seconds_to_nanoseconds  # seconds
-        df["x_end"] = df["x_start"] + df["duration_s"] / seconds_to_nanoseconds  # seconds
-
-    # plot
-    if xaxis_datetime:
-        fig = px.timeline(
-            df,
-            x_start="x_start",
-            x_end="x_end",
-            y=y_col,
-            category_orders={y_col: cat_order} if multi_overlay else None,
-            color="model_component",
-            color_discrete_map=colours,
-            facet_col="pet" if separate_plots and len(pets) > 1 else None,
-            facet_col_wrap=2 if separate_plots else None,
-            hover_data={
-                "component": True,
-                "duration_s": ":.6f",
-                "pet": True,
-                y_hover_col: False,
-            },
-            title="Flame Graph https://github.com/ACCESS-NRI/esmf-trace",
-        )
-        fig.update_xaxes(title="Wall-clock time")
-    else:
-        df["width"] = df["x_end"] - df["x_start"]
-        if separate_plots and len(pets) > 1:
-            rows = (len(pets) + 1) // 2 if len(pets) > 2 else len(pets)
-            cols = 2 if len(pets) > 2 else 1
-            fig = make_subplots(
-                rows=rows,
-                cols=cols,
-                subplot_titles=[f"Pet {p}" for p in pets],
-                vertical_spacing=0.1 if rows > 1 else 0.15,
-                horizontal_spacing=0.1 if cols > 1 else 0.15,
-            )
-            pet_to_rc = {p: (i // cols + 1, i % cols + 1) for i, p in enumerate(pets)}
+    fig = go.Figure()
+    grouped = plot_df.groupby(["pet", "model_component", "depth"], sort=False)
+    for (pet, path, depth), group in grouped:
+        row = group.iloc[0]
+        customdata = [
+            [x_end, float(duration)] for x_end, duration in zip(group["x_end"], group["duration_seconds"], strict=True)
+        ]
+        if xaxis_datetime:
+            timing_hover = "Start %{base}<br>End %{customdata[0]}<br>"
         else:
-            fig = go.Figure()
-            for p in pets:
-                sub = df[df["pet"] == p]
-                for comp, grp in sub.groupby("model_component", sort=False):
-                    bar = go.Bar(
-                        y=grp[y_col],
-                        x=grp["width"],
-                        base=grp["x_start"],
-                        orientation="h",
-                        name=comp if p == pets[0] else f"{comp} (PET {p})",
-                        marker_color=colours[comp],
-                        hovertext=[
-                            f"{comp}<br>PET {p}<br>"
-                            f"{y_hover_col}: {lbl}<br>"
-                            f"start = {s:.6f}s<br>"
-                            f"end   = {e:.6f}s<br>"
-                            f"dur   = {w:.6f}s"
-                            for lbl, s, e, w in zip(
-                                grp[y_hover_col], grp["x_start"], grp["x_end"], grp["width"], strict=True
-                            )
-                        ],
-                        hoverinfo="text",
-                        showlegend=bool(p == pets[0]),
-                    )
-                    if separate_plots and len(pets) > 1:
-                        r, c = pet_to_rc[p]
-                        fig.add_trace(bar, row=r, col=c)
-                    else:
-                        fig.add_trace(bar)
+            timing_hover = "Start %{base:.6f} s<br>End %{customdata[0]:.6f} s<br>"
 
-        fig.update_xaxes(
-            title="Seconds since first event",
-            showgrid=True,
-            gridcolor="rgba(0,0,0,0.15)",
-        )
-        fig.update_layout(
-            title="Flame Graph https://github.com/ACCESS-NRI/esmf-trace",
-            bargap=0,
-            barmode="overlay",
-            legend_title_text="Component",
-            template="simple_white",
+        meta = {
+            "leaf": row["phase_leaf"],
+            "group": row["phase_group"],
+            "component": row["phase_component"],
+            "label": row["phase_label"],
+            "depth": int(depth),
+            "pet": int(pet),
+            "points": int(len(group)),
+            "path": path,
+        }
+
+        # Keep one Plotly trace per logical region. The full path is stored once
+        # in trace metadata / hovertemplate, not repeated once per timing span.
+        fig.add_trace(
+            go.Bar(
+                y=group["y_cat"],
+                x=group["width"],
+                base=group["x_start"],
+                orientation="h",
+                name=path,
+                showlegend=False,
+                meta=meta,
+                customdata=customdata,
+                hovertemplate=(
+                    f"<b>{path}</b><br>"
+                    f"{meta['group']} · {meta['component']} · {meta['label']}<br>"
+                    f"PET {int(pet)} · Depth {int(depth)}<br>"
+                    f"{timing_hover}"
+                    "Duration %{customdata[1]:.6f} s<extra></extra>"
+                ),
+            )
         )
 
-    # yaxis label
-    y_title = "Stack Depth" if not multi_overlay else "Stack Depth and PET"
-    fig.update_yaxes(title=y_title, **yaxis_kwargs)
-
-    if separate_plots and len(pets) > 1:
-        depth_max = df["depth"].max()
-
-        common_range = [depth_max + 0.8, -1]
-
-        for yaxis in fig.select_yaxes():
-            yaxis.update(range=common_range, autorange=False)
-
-    if renderer:
-        pio.renderers.default = renderer
-
-    html_path = Path(html_path)
-    html_path.parent.mkdir(parents=True, exist_ok=True)
-    fig.write_html(str(html_path), include_plotlyjs="cdn")
-
-    if show_html:
-        fig.show()
+    if html_path is not None:
+        write_trace_explorer_html(
+            fig,
+            plot_df,
+            Path(html_path),
+            xaxis_datetime=xaxis_datetime,
+        )
 
     return fig

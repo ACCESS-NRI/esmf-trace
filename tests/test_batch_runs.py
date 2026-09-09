@@ -198,8 +198,8 @@ class TestRunBatchJobsProgressOutput:
 
 
 class TestFingerprintHelpers:
-    def test_excludes_settings_that_do_not_affect_written_output(self):
-        fingerprint = _output_fingerprint({"max_depth": 6, "post_dir": Path("/a"), "show_html": True})
+    def test_excludes_output_location_from_fingerprint(self):
+        fingerprint = _output_fingerprint({"max_depth": 6, "post_dir": Path("/a")})
         assert fingerprint == {"max_depth": 6}
 
     def test_paths_are_recorded_as_strings(self):
@@ -283,15 +283,6 @@ class TestReprocessOnChangedSettings:
 
         recorded = _read_recorded_settings(tmp_path / "post" / "postprocessing_p" / "output000", "p")
         assert recorded["max_depth"] == 20
-
-    def test_show_html_alone_does_not_reprocess(self, tmp_path, archive, serial_pool, writing_run, capsys):
-        self._run(tmp_path, archive, show_html=False)
-        capsys.readouterr()
-
-        self._run(tmp_path, archive, show_html=True)
-
-        assert len(writing_run) == 1
-        assert "settings are unchanged" in capsys.readouterr().out
 
     def test_force_reprocesses_unchanged_settings(self, tmp_path, archive, serial_pool, writing_run, capsys):
         self._run(tmp_path, archive, max_depth=6)
