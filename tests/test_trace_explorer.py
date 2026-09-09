@@ -127,3 +127,42 @@ def test_plot_writes_explorer_and_preserves_region_count(tmp_path: Path):
     assert "showLeafPreview" in text
     assert "showLeafTooltip" in text
     assert 'b.setAttribute("aria-label"' in text
+
+    ocn_trace = next(trace for trace in fig.data if trace.meta["component"] == "OCN")
+    assert list(ocn_trace.base) == [0.0, 2.0]
+    assert list(ocn_trace.x) == [1.0, 1.0]
+    assert [list(values) for values in ocn_trace.customdata] == [[1.0, 1.0], [3.0, 1.0]]
+    assert "End %{customdata[0]:.6f} s" in ocn_trace.hovertemplate
+    assert "Duration %{customdata[1]:.6f} s" in ocn_trace.hovertemplate
+
+
+def test_flame_graph_duration_is_derived_from_start_and_end():
+    ns = 1_000_000_000
+    df = pd.DataFrame(
+        [
+            {
+                "model_component": _path("[ATM] RunPhase1"),
+                "start": 0,
+                "end": ns,
+                "duration_s": ns,
+                "depth": 1,
+                "pet": 0,
+            },
+            {
+                "model_component": _path("[OCN] RunPhase1"),
+                "start": 2 * ns,
+                "end": 5 * ns,
+                # Deliberately inconsistent: visual duration must still come from end - start.
+                "duration_s": 99 * ns,
+                "depth": 1,
+                "pet": 0,
+            },
+        ]
+    )
+
+    fig = plot_flame_graph(df)
+    ocn_trace = next(trace for trace in fig.data if trace.meta["component"] == "OCN")
+
+    assert list(ocn_trace.base) == [2.0]
+    assert list(ocn_trace.x) == [3.0]
+    assert [list(values) for values in ocn_trace.customdata] == [[5.0, 3.0]]
