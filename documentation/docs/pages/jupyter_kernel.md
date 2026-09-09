@@ -17,12 +17,13 @@ Log in to [ARE](https://are.nci.org.au/), open **JupyterLab**, and set:
 | Field | Value |
 | ----- | ----- |
 | **Walltime (hours)** | long enough for the analysis, e.g. `2` |
-| **Queue** | `normal` |
-| **Compute Size** | start with `Small`, and increase if a large trace exhausts memory |
+| **Queue** | `normalbw` |
+| **Compute Size** | start with `small`, and increase if a large trace exhausts memory |
 | **Project** | the project the session is charged to |
 | **Storage** | every filesystem the session touches, joined by `+`, e.g. `gdata/vk83+gdata/<project>+scratch/<project>` |
 
-`gdata/vk83` is required: without it the Babeltrace 2 module cannot be loaded.
+!!! warning vk83 must be loaded
+    Storage `gdata/vk83` is required: without it the Babeltrace 2 module cannot be loaded.
 
 ## Step 2: Load Babeltrace 2 and the virtual environment
 
