@@ -296,6 +296,8 @@ fig = plot_flame_graph(
     df,
     pets=[0, 104],
     xaxis_datetime=False,
+    coupling_timestep_seconds=900,
+    simulation_calendar="gregorian",
     html_path=Path("trace_flamegraph.html"),
 )
 ```
