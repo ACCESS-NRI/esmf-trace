@@ -19,6 +19,15 @@ from access.esmf_trace.main import build_parser, cli_run_from_yaml, main
 from access.esmf_trace.tmp_yaml_parser import write_yaml
 
 
+def _defaults(**kwargs):
+    values = {
+        "coupling_timestep_seconds": 900,
+        "simulation_calendar": "gregorian",
+    }
+    values.update(kwargs)
+    return DefaultSettings(**values)
+
+
 class _SerialFuture:
     """Run the job inline so the tests don't depend on the fork start method."""
 
@@ -121,7 +130,7 @@ class TestRunBatchJobsProgressOutput:
     """
 
     def test_per_run_post_base_path_overriding_the_default(self, tmp_path, archive, serial_pool, stub_run, capsys):
-        defaults = DefaultSettings(post_base_path=str(tmp_path / "default_post"))
+        defaults = _defaults(post_base_path=str(tmp_path / "default_post"))
         runs = [RunSettings(base_prefix="p", exact_path=archive, post_base_path=str(tmp_path / "run_post"))]
 
         run_batch_jobs(defaults, runs)
@@ -133,7 +142,7 @@ class TestRunBatchJobsProgressOutput:
 
     def test_relative_post_base_path(self, tmp_path, archive, serial_pool, stub_run, capsys, monkeypatch):
         monkeypatch.chdir(tmp_path)
-        defaults = DefaultSettings(post_base_path="relative_post")
+        defaults = _defaults(post_base_path="relative_post")
 
         run_batch_jobs(defaults, [RunSettings(base_prefix="p", exact_path=archive)])
 
@@ -143,7 +152,7 @@ class TestRunBatchJobsProgressOutput:
 
     def test_user_expanded_post_base_path(self, tmp_path, archive, serial_pool, stub_run, capsys, monkeypatch):
         monkeypatch.setenv("HOME", str(tmp_path))
-        defaults = DefaultSettings(post_base_path="~/post")
+        defaults = _defaults(post_base_path="~/post")
 
         run_batch_jobs(defaults, [RunSettings(base_prefix="p", exact_path=archive)])
 
@@ -156,7 +165,7 @@ class TestRunBatchJobsProgressOutput:
             raise RuntimeError("bt2 blew up")
 
         monkeypatch.setattr(batch_runs, "single_run", boom)
-        defaults = DefaultSettings(post_base_path=str(tmp_path / "default_post"))
+        defaults = _defaults(post_base_path=str(tmp_path / "default_post"))
         runs = [RunSettings(base_prefix="p", exact_path=archive, post_base_path=str(tmp_path / "run_post"))]
 
         run_batch_jobs(defaults, runs)
@@ -172,7 +181,7 @@ class TestRunBatchJobsProgressOutput:
         (done / "p_timeseries.json").write_text("[]")
         (done / "p_flamegraph.html").write_text("<html></html>")
 
-        defaults = DefaultSettings(post_base_path=str(tmp_path / "default_post"))
+        defaults = _defaults(post_base_path=str(tmp_path / "default_post"))
         runs = [RunSettings(base_prefix="p", exact_path=archive, post_base_path=str(run_post))]
 
         run_batch_jobs(defaults, runs)
@@ -182,7 +191,7 @@ class TestRunBatchJobsProgressOutput:
         assert "No jobs to run" in out
 
     def test_label_is_relative_to_each_runs_own_base(self, tmp_path, archive, serial_pool, stub_run, capsys):
-        defaults = DefaultSettings(post_base_path=str(tmp_path / "shared_post"))
+        defaults = _defaults(post_base_path=str(tmp_path / "shared_post"))
         runs = [
             RunSettings(base_prefix="a", exact_path=archive),
             RunSettings(base_prefix="b", exact_path=archive, post_base_path=str(tmp_path / "other_post")),
@@ -235,7 +244,7 @@ class TestReprocessOnChangedSettings:
     """
 
     def _run(self, tmp_path, archive, **defaults_kwargs):
-        defaults = DefaultSettings(post_base_path=str(tmp_path / "post"), **defaults_kwargs)
+        defaults = _defaults(post_base_path=str(tmp_path / "post"), **defaults_kwargs)
         run_batch_jobs(defaults, [RunSettings(base_prefix="p", exact_path=archive)])
 
     def test_first_run_records_the_settings(self, tmp_path, archive, serial_pool, writing_run):
@@ -357,7 +366,7 @@ class TestBatchResult:
     """
 
     def _run(self, tmp_path, archive, n_runs=1, **defaults_kwargs):
-        defaults = DefaultSettings(post_base_path=str(tmp_path / "post"), **defaults_kwargs)
+        defaults = _defaults(post_base_path=str(tmp_path / "post"), **defaults_kwargs)
         runs = [RunSettings(base_prefix=f"p{i}", exact_path=archive) for i in range(n_runs)]
         return run_batch_jobs(defaults, runs)
 
@@ -459,8 +468,18 @@ def _write_run_config(tmp_path, archive):
     cfg = tmp_path / "run.yaml"
     write_yaml(
         {
-            "default_settings": {"post_base_path": str(tmp_path / "post"), "max_workers": 1},
-            "runs": [{"base_prefix": "p0", "exact_path": str(archive)}],
+            "default_settings": {
+                "post_base_path": str(tmp_path / "post"),
+                "max_workers": 1,
+                "coupling_timestep_seconds": 900,
+                "simulation_calendar": "gregorian",
+            },
+            "runs": [
+                {
+                    "base_prefix": "p0",
+                    "exact_path": str(archive),
+                }
+            ],
         },
         cfg,
     )

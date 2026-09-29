@@ -11,6 +11,9 @@ class ConfigError(Exception):
     pass
 
 
+SimulationCalendar = Literal["gregorian", "no_leap"]
+
+
 @dataclass(frozen=True)
 class DefaultSettings:
     """
@@ -18,29 +21,24 @@ class DefaultSettings:
     in it. A run may override post_base_path and model_component; everything
     else here applies to the whole batch.
 
-    post_base_path: root directory results are written under. See RunSettings
-        for how the tree beneath it is laid out.
-    stream_prefix: filename prefix of the per-PET CTF stream files inside each
-        traceout dir, e.g. "esmf_stream" for esmf_stream_0000.
-    model_component: default component selector(s) to keep in the timeseries,
-        as a comma-separated string or a list.
-    max_workers: number of worker processes. None falls back to the physical
-        core count.
-    force: reprocess every job even when its outputs already exist and the
-        settings that produced them are unchanged.
-    max_depth: drop trace regions nested deeper than this.
-    merge_adjacent, merge_gap_ns: merge consecutive spans of the same component
-        separated by no more than merge_gap_ns nanoseconds.
-    xaxis_datetime: use absolute timestamps on the flame-graph X axis
-        instead of elapsed seconds.
     coupling_timestep_seconds: simulated seconds between coupling timestamps.
-        When set, the flame graph annotates hovered spans with simulation day
-        and the coupling timestamp within that day.
+        Required.
+    simulation_calendar: model calendar. Required and must be either
+        "gregorian" or "no_leap".
     simulation_start_datetime: optional ISO model datetime corresponding to
         the first coupling timestamp in the trace.
-    simulation_calendar: calendar used for simulation_start_datetime. Supported
-        values are gregorian and noleap/no_leap.
+    post_base_path: root directory results are written under.
+    stream_prefix: filename prefix of the per-PET CTF stream files.
+    model_component: default component selector(s).
+    max_workers: number of worker processes.
+    force: reprocess every job even when outputs already exist.
+    max_depth: drop trace regions nested deeper than this.
+    merge_adjacent, merge_gap_ns: merge consecutive spans.
+    xaxis_datetime: use absolute trace timestamps on the X axis.
     """
+
+    coupling_timestep_seconds: int
+    simulation_calendar: SimulationCalendar
 
     post_base_path: str | None = None
     stream_prefix: str = "esmf_stream"
@@ -50,9 +48,7 @@ class DefaultSettings:
     max_depth: int = 6
     merge_adjacent: bool = False
     merge_gap_ns: int = 1000
-    coupling_timestep_seconds: int | None = None
     simulation_start_datetime: str | None = None
-    simulation_calendar: str = "gregorian"
     force: bool = False
 
 
@@ -328,6 +324,26 @@ def _norm_int_or_none(v: int | str | None) -> int | None:
     return int(v)
 
 
+def _norm_coupling_timestep_seconds(value: object) -> int:
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise ValueError("coupling_timestep_seconds must be a positive integer")
+
+    if value <= 0:
+        raise ValueError("coupling_timestep_seconds must be > 0")
+
+    return value
+
+
+def _norm_simulation_calendar(value: object) -> SimulationCalendar:
+    if value == "gregorian":
+        return "gregorian"
+
+    if value == "no_leap":
+        return "no_leap"
+
+    raise ValueError("simulation_calendar must be one of: gregorian, no_leap")
+
+
 def _norm_path_or_none(v: str | Path | None) -> Path | None:
     if v is None:
         return None
@@ -469,6 +485,14 @@ def parse_run_config(
 
     _reject_unknown_keys(default, _field_names(DefaultSettings), "default_settings")
     _reject_unknown_keys(overrides, _field_names(DefaultSettings), "run_overrides")
+    _require_keys(
+        default,
+        [
+            "coupling_timestep_seconds",
+            "simulation_calendar",
+        ],
+        where="default_settings",
+    )
     default.update(overrides)
 
     try:
@@ -481,9 +505,9 @@ def parse_run_config(
             max_depth=int(default.get("max_depth", 6)),
             merge_adjacent=bool(default.get("merge_adjacent", False)),
             merge_gap_ns=int(default.get("merge_gap_ns", 1000)),
-            coupling_timestep_seconds=_norm_int_or_none(default.get("coupling_timestep_seconds")),
+            coupling_timestep_seconds=_norm_coupling_timestep_seconds(default["coupling_timestep_seconds"]),
+            simulation_calendar=_norm_simulation_calendar(default["simulation_calendar"]),
             simulation_start_datetime=default.get("simulation_start_datetime"),
-            simulation_calendar=str(default.get("simulation_calendar", "gregorian")),
             force=bool(default.get("force", False)),
         )
     except (TypeError, ValueError) as e:

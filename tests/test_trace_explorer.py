@@ -10,6 +10,11 @@ from access.esmf_trace.trace_explorer import (
     selector_description,
 )
 
+PLOT_METADATA = {
+    "coupling_timestep_seconds": 900,
+    "simulation_calendar": "gregorian",
+}
+
 
 def _path(leaf: str) -> str:
     return f"[ESMF]/[ensemble] RunPhase1/[ESM0001] RunPhase1/{leaf}"
@@ -95,7 +100,7 @@ def test_plot_writes_explorer_and_preserves_region_count(tmp_path: Path):
     )
 
     html_path = tmp_path / "trace.html"
-    fig = plot_flame_graph(df, html_path=html_path)
+    fig = plot_flame_graph(df, html_path=html_path, **PLOT_METADATA)
 
     # Two logical region traces, but three timing spans.
     assert len(fig.data) == 2
@@ -160,7 +165,7 @@ def test_flame_graph_duration_is_derived_from_start_and_end():
         ]
     )
 
-    fig = plot_flame_graph(df)
+    fig = plot_flame_graph(df, **PLOT_METADATA)
     ocn_trace = next(trace for trace in fig.data if trace.meta["component"] == "OCN")
 
     assert list(ocn_trace.base) == [2.0]
@@ -202,7 +207,7 @@ def test_hover_maps_regions_to_simulation_day_and_coupling_timestamp(tmp_path: P
         pd.DataFrame(rows),
         coupling_timestep_seconds=21_600,
         simulation_start_datetime="2000-01-01T00:00:00",
-        simulation_calendar="NO_LEAP",
+        simulation_calendar="no_leap",
         html_path=html_path,
     )
 
@@ -216,7 +221,7 @@ def test_hover_maps_regions_to_simulation_day_and_coupling_timestamp(tmp_path: P
     ]
     assert "Simulation day %{customdata[2]:.0f}" in ocn_trace.hovertemplate
     assert "Coupling timestamp %{customdata[3]:.0f}/4" in ocn_trace.hovertemplate
-    assert ocn_trace.meta["simulation_clock"]["calendar"] == "noleap"
+    assert ocn_trace.meta["simulation_clock"]["calendar"] == "no_leap"
     assert ocn_trace.meta["simulation_clock"]["startDatetime"] == "2000-01-01T00:00:00"
 
     text = html_path.read_text()

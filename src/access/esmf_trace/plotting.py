@@ -7,6 +7,7 @@ import pandas as pd
 import plotly.graph_objects as go
 
 from .common_vars import seconds_to_nanoseconds
+from .config import SimulationCalendar
 from .trace_explorer import annotate_selector_columns, write_trace_explorer_html
 
 SECONDS_PER_DAY = 86400  # in seconds
@@ -20,18 +21,16 @@ COUPLING_ANCHOR_CANDIDATES = (
 )
 
 
-def _normalise_simulation_calendar(value: str) -> str:
-    calendar = str(value).strip().lower()
-    aliases = {
-        "gregorian": "gregorian",
-        "standard": "gregorian",
-        "noleap": "noleap",
-        "no_leap": "noleap",
-    }
-    try:
-        return aliases[calendar]
-    except KeyError:
-        raise ValueError("simulation_calendar must be one of: gregorian/standard, noleap/no_leap") from None
+def _normalise_simulation_calendar(
+    value: SimulationCalendar,
+) -> SimulationCalendar:
+    if value == "gregorian":
+        return "gregorian"
+
+    if value == "no_leap":
+        return "no_leap"
+
+    raise ValueError("simulation_calendar must be one of: gregorian, no_leap")
 
 
 def _normalise_simulation_start(value: str | None, calendar: str) -> str | None:
@@ -45,8 +44,8 @@ def _normalise_simulation_start(value: str | None, calendar: str) -> str | None:
     parsed = datetime.fromisoformat(text.removesuffix("Z"))
     if parsed.tzinfo is not None:
         raise ValueError("simulation_start_datetime must be timezone-free")
-    if calendar == "noleap" and parsed.month == 2 and parsed.day == 29:
-        raise ValueError("29 February is invalid for the noleap calendar")
+    if calendar == "no_leap" and parsed.month == 2 and parsed.day == 29:
+        raise ValueError("29 February is invalid for the no_leap calendar")
     return parsed.isoformat()
 
 
@@ -84,22 +83,23 @@ def _find_coupling_anchor(df: pd.DataFrame) -> tuple[list[int], dict | None]:
 
 def annotate_simulation_clock(
     df: pd.DataFrame,
-    coupling_timestep_seconds: int | None,
+    coupling_timestep_seconds: int,
+    simulation_calendar: SimulationCalendar,
     simulation_start_datetime: str | None = None,
-    simulation_calendar: str = "gregorian",
 ) -> tuple[pd.DataFrame, dict | None]:
-    """Map trace spans to simulation day and coupling timestamp."""
+    """
+    Map trace spans to simulation day and coupling timestamp.
+    """
     out = df.copy()
     out["simulation_day"] = math.nan
     out["coupling_timestamp_in_day"] = math.nan
     out["coupling_timestamp"] = math.nan
 
-    if coupling_timestep_seconds is None:
-        return out, None
-
     dt_couple = int(coupling_timestep_seconds)
+
     if dt_couple <= 0:
         raise ValueError("coupling_timestep_seconds must be > 0")
+
     if SECONDS_PER_DAY % dt_couple:
         raise ValueError(
             "coupling_timestep_seconds must divide 86400 exactly "
@@ -199,9 +199,10 @@ def plot_flame_graph(
     df: pd.DataFrame,
     pets: int | list[int] | None = None,
     xaxis_datetime: bool = False,
-    coupling_timestep_seconds: int | None = None,
+    *,
+    coupling_timestep_seconds: int,
+    simulation_calendar: SimulationCalendar,
     simulation_start_datetime: str | None = None,
-    simulation_calendar: str = "gregorian",
     html_path: Path | None = None,
 ):
     """
@@ -211,8 +212,8 @@ def plot_flame_graph(
     plot_df, simulation_clock = annotate_simulation_clock(
         plot_df,
         coupling_timestep_seconds,
-        simulation_start_datetime,
-        simulation_calendar,
+        simulation_calendar=simulation_calendar,
+        simulation_start_datetime=simulation_start_datetime,
     )
 
     fig = go.Figure()

@@ -52,7 +52,7 @@ def _add_run_overrides(parser: argparse.ArgumentParser) -> None:
     arg.add_argument(
         "--coupling-timestep-seconds",
         type=int,
-        help="Simulated seconds per coupling timestamp used for flame-graph simulation-clock hover labels.",
+        help="Override the required simulated seconds per coupling timestamp from config.",
     )
     arg.add_argument(
         "--simulation-start-datetime",
@@ -62,8 +62,8 @@ def _add_run_overrides(parser: argparse.ArgumentParser) -> None:
     arg.add_argument(
         "--simulation-calendar",
         type=str,
-        choices=("gregorian", "noleap", "no_leap"),
-        help="Model calendar used by --simulation-start-datetime.",
+        choices=("gregorian", "no_leap"),
+        help="Override the required simulation calendar from config. Valid values: gregorian, no_leap.",
     )
     arg.add_argument(
         "--max-workers",
