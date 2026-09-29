@@ -33,6 +33,13 @@ class DefaultSettings:
         separated by no more than merge_gap_ns nanoseconds.
     xaxis_datetime: use absolute timestamps on the flame-graph X axis
         instead of elapsed seconds.
+    coupling_timestep_seconds: simulated seconds between coupling timestamps.
+        When set, the flame graph annotates hovered spans with simulation day
+        and the coupling timestamp within that day.
+    simulation_start_datetime: optional ISO model datetime corresponding to
+        the first coupling timestamp in the trace.
+    simulation_calendar: calendar used for simulation_start_datetime. Supported
+        values are gregorian and noleap/no_leap.
     """
 
     post_base_path: str | None = None
@@ -43,6 +50,9 @@ class DefaultSettings:
     max_depth: int = 6
     merge_adjacent: bool = False
     merge_gap_ns: int = 1000
+    coupling_timestep_seconds: int | None = None
+    simulation_start_datetime: str | None = None
+    simulation_calendar: str = "gregorian"
     force: bool = False
 
 
@@ -186,6 +196,9 @@ class RunSettings:
             "max_depth": defaults.max_depth,
             "stream_prefix": defaults.stream_prefix,
             "xaxis_datetime": defaults.xaxis_datetime,
+            "coupling_timestep_seconds": defaults.coupling_timestep_seconds,
+            "simulation_start_datetime": defaults.simulation_start_datetime,
+            "simulation_calendar": defaults.simulation_calendar,
         }
 
 
@@ -468,6 +481,9 @@ def parse_run_config(
             max_depth=int(default.get("max_depth", 6)),
             merge_adjacent=bool(default.get("merge_adjacent", False)),
             merge_gap_ns=int(default.get("merge_gap_ns", 1000)),
+            coupling_timestep_seconds=_norm_int_or_none(default.get("coupling_timestep_seconds")),
+            simulation_start_datetime=default.get("simulation_start_datetime"),
+            simulation_calendar=str(default.get("simulation_calendar", "gregorian")),
             force=bool(default.get("force", False)),
         )
     except (TypeError, ValueError) as e:

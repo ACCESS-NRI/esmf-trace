@@ -384,6 +384,7 @@ def build_explorer_payload(fig: go.Figure, df: pd.DataFrame, xaxis_datetime: boo
         "regionCount": len(fig.data),
         "spanCount": int(len(df)),
         "petCount": int(df["pet"].nunique()),
+        "petIndices": sorted(int(pet) for pet in df["pet"].unique()),
     }
 
 
@@ -429,7 +430,8 @@ const allTraceIndices=P.data.map((_,i)=>i);
 
 document.getElementById("stat-spans").textContent=P.spanCount.toLocaleString();
 document.getElementById("stat-regions").textContent=P.regionCount.toLocaleString();
-document.getElementById("stat-pets").textContent=P.petCount.toLocaleString();
+document.getElementById("stat-pets").textContent =
+  `${P.petCount.toLocaleString()} PET${P.petCount===1?"":"s"} · ${P.petIndices.join(", ")}`;
 
 function groupLeaves(group){
   const out=[];
@@ -619,6 +621,34 @@ document.getElementById("global-search").oninput=ev=>{searchQuery=ev.target.valu
 document.getElementById("clear").onclick=()=>{activeLeaves.clear();activeDepths.clear();searchQuery="";pinnedPreviewLeaf=null;document.getElementById("global-search").value="";hideLeafPreview();hideLeafTooltip();refreshControls();scheduleUpdate()};
 document.getElementById("reset").onclick=scheduleResetView;
 
+function simulationDate(globalTimestamp,clock){
+  if(!clock||!clock.startDatetime||!Number.isFinite(globalTimestamp))return "";
+  const match=clock.startDatetime.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})/);
+  if(!match)return "";
+  let [,ys,ms,ds,hs,mins,ss]=match;
+  let year=Number(ys),month=Number(ms),day=Number(ds);
+  let secondOfDay=Number(hs)*3600+Number(mins)*60+Number(ss)+(globalTimestamp-1)*clock.couplingTimestepSeconds;
+  const dayDelta=Math.floor(secondOfDay/86400);
+  secondOfDay=((secondOfDay%86400)+86400)%86400;
+  const pad=n=>String(n).padStart(2,"0");
+  const finish=()=>{
+    const hour=Math.floor(secondOfDay/3600),minute=Math.floor((secondOfDay%3600)/60),second=secondOfDay%60;
+    return `${String(year).padStart(4,"0")}-${pad(month)}-${pad(day)} ${pad(hour)}:${pad(minute)}:${pad(second)}`;
+  };
+  if(clock.calendar==="gregorian"){
+    const date=new Date(Date.UTC(year,month-1,day)+dayDelta*86400000);
+    year=date.getUTCFullYear();month=date.getUTCMonth()+1;day=date.getUTCDate();
+    return finish();
+  }
+  const monthLengths=[31,28,31,30,31,30,31,31,30,31,30,31];
+  const monthOffsets=[0,31,59,90,120,151,181,212,243,273,304,334];
+  let ordinal=year*365+monthOffsets[month-1]+(day-1)+dayDelta;
+  year=Math.floor(ordinal/365);let rem=((ordinal%365)+365)%365;month=1;
+  while(rem>=monthLengths[month-1]){rem-=monthLengths[month-1];month++}
+  day=rem+1;
+  return finish();
+}
+
 const layout={
   bargap:0,barmode:"overlay",showlegend:false,paper_bgcolor:"#fff",plot_bgcolor:"#fff",margin:{l:145,r:24,t:16,b:64},dragmode:"zoom",uirevision:"esmf-trace-explorer",
   xaxis:{title:{text:P.xaxisDatetime?"Wall-clock time":"Elapsed time (s)",font:{size:14,color:"#1F2937"},standoff:12},range:FULL_X.slice(),autorange:false,fixedrange:false,tickfont:{size:13,color:"#344054"},showgrid:true,gridcolor:"rgba(100,116,139,.18)",zeroline:false},
@@ -628,7 +658,27 @@ const layout={
 const config={responsive:true,displaylogo:false,scrollZoom:true,doubleClick:false,modeBarButtonsToRemove:["autoScale2d","resetScale2d","select2d","lasso2d"],toImageButtonOptions:{filename:"esmf_trace"}};
 Plotly.newPlot("plot",P.data,layout,config).then(graph=>{
   refreshControls();document.getElementById("status").textContent=`${P.regionCount}/${P.regionCount} regions`;document.getElementById("boot").style.opacity="0";setTimeout(()=>document.getElementById("boot").remove(),180);
-  const inspector=document.getElementById("inspector");graph.on("plotly_hover",ev=>{const pt=ev.points&&ev.points[0];if(!pt)return;const m=pt.data.meta;document.getElementById("inspect-path").textContent=m.path;const start=P.xaxisDatetime?String(pt.base):`${Number(pt.base).toFixed(6)} s`;const end=P.xaxisDatetime?String(pt.customdata[0]):`${Number(pt.customdata[0]).toFixed(6)} s`;const duration=`${Number(pt.customdata[1]).toFixed(6)} s`;document.getElementById("inspect-meta").textContent=`${m.group} · ${m.component} · ${m.label} · PET ${m.pet} · depth ${m.depth} · start ${start} · end ${end} · duration ${duration}`;inspector.classList.add("show")});graph.on("plotly_unhover",()=>inspector.classList.remove("show"));
+  const inspector=document.getElementById("inspector");
+  graph.on("plotly_hover",ev=>{
+    const pt=ev.points&&ev.points[0];if(!pt)return;
+    const m=pt.data.meta;
+    document.getElementById("inspect-path").textContent=m.path;
+    const start=P.xaxisDatetime?String(pt.base):`${Number(pt.base).toFixed(6)} s`;
+    const end=P.xaxisDatetime?String(pt.customdata[0]):`${Number(pt.customdata[0]).toFixed(6)} s`;
+    const duration=`${Number(pt.customdata[1]).toFixed(6)} s`;
+    let details=`${m.group} · ${m.component} · ${m.label} · PET ${m.pet} · depth ${m.depth} · start ${start} · end ${end} · duration ${duration}`;
+    const clock=m.simulation_clock,data=pt.customdata;
+    const hasSimulation=clock&&Array.isArray(data)&&data.length>=5&&data[2]!=null&&data[3]!=null&&data[4]!=null;
+    if(hasSimulation){
+      const day=Number(data[2]),timestampInDay=Number(data[3]),globalTimestamp=Number(data[4]);
+      details+=` · simulation day ${day} · coupling timestamp ${timestampInDay}/${clock.timestampsPerDay} · trace coupling #${globalTimestamp}`;
+      const modelDate=simulationDate(globalTimestamp,clock);
+      if(modelDate)details+=` · model time ${modelDate}`;
+    }
+    document.getElementById("inspect-meta").textContent=details;
+    inspector.classList.add("show");
+  });
+  graph.on("plotly_unhover",()=>inspector.classList.remove("show"));
 });
 window.addEventListener("resize",()=>{if(currentPopoverGroup){const b=groupButtons.get(currentPopoverGroup);if(b)positionPopover(b)}});
 """
@@ -646,7 +696,7 @@ TRACE_EXPLORER_TEMPLATE = Template(r"""<!doctype html>
 <div id="header">
   <div id="top">
     <div class="brand"><strong>ESMF Trace Explorer</strong><small>Interactive performance timeline</small></div>
-    <div class="stats"><span class="stat"><b id="stat-spans"></b> spans</span><span class="stat"><b id="stat-regions"></b> regions</span><span class="stat"><b id="stat-pets"></b> PETs</span></div>
+    <div class="stats"><span class="stat"><b id="stat-spans"></b> spans</span><span class="stat"><b id="stat-regions"></b> regions</span><span class="stat"><b id="stat-pets"></b></span></div>
     <div class="tools"><div class="search"><input id="global-search" placeholder="Search full timing path..."></div><span id="status"></span><button class="tool" id="clear">Clear filters</button><button class="tool primary" id="reset">Reset view</button></div>
   </div>
   <div id="filters">

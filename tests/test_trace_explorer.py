@@ -166,3 +166,61 @@ def test_flame_graph_duration_is_derived_from_start_and_end():
     assert list(ocn_trace.base) == [2.0]
     assert list(ocn_trace.x) == [3.0]
     assert [list(values) for values in ocn_trace.customdata] == [[5.0, 3.0]]
+
+
+def test_hover_maps_regions_to_simulation_day_and_coupling_timestamp(tmp_path: Path):
+    ns = 1_000_000_000
+    rows = []
+
+    # Five coupling timestamps, four per simulation day. Wall-clock cadence is
+    # deliberately unrelated to model dt: 10 s wall time versus 21600 s model time.
+    for index in range(5):
+        wall_start = index * 10 * ns
+        rows.extend(
+            [
+                {
+                    "model_component": _path("[MED] med_phases_aofluxes_run"),
+                    "start": wall_start,
+                    "end": wall_start + ns,
+                    "duration_s": ns,
+                    "depth": 2,
+                    "pet": 0,
+                },
+                {
+                    "model_component": _path("[OCN] RunPhase1"),
+                    "start": wall_start + ns,
+                    "end": wall_start + 2 * ns,
+                    "duration_s": ns,
+                    "depth": 2,
+                    "pet": 0,
+                },
+            ]
+        )
+
+    html_path = tmp_path / "trace.html"
+    fig = plot_flame_graph(
+        pd.DataFrame(rows),
+        coupling_timestep_seconds=21_600,
+        simulation_start_datetime="2000-01-01T00:00:00",
+        simulation_calendar="NO_LEAP",
+        html_path=html_path,
+    )
+
+    ocn_trace = next(trace for trace in fig.data if trace.meta["component"] == "OCN")
+    assert [list(values)[2:] for values in ocn_trace.customdata] == [
+        [1, 1, 1],
+        [1, 2, 2],
+        [1, 3, 3],
+        [1, 4, 4],
+        [2, 1, 5],
+    ]
+    assert "Simulation day %{customdata[2]:.0f}" in ocn_trace.hovertemplate
+    assert "Coupling timestamp %{customdata[3]:.0f}/4" in ocn_trace.hovertemplate
+    assert ocn_trace.meta["simulation_clock"]["calendar"] == "noleap"
+    assert ocn_trace.meta["simulation_clock"]["startDatetime"] == "2000-01-01T00:00:00"
+
+    text = html_path.read_text()
+    assert "function simulationDate(globalTimestamp,clock)" in text
+    assert "simulation day ${day}" in text
+    assert "coupling timestamp ${timestampInDay}/${clock.timestampsPerDay}" in text
+    assert "model time ${modelDate}" in text

@@ -50,6 +50,22 @@ def _add_run_overrides(parser: argparse.ArgumentParser) -> None:
         help="Override to enable datetime x-axis in flame graph from config (default: False)",
     )
     arg.add_argument(
+        "--coupling-timestep-seconds",
+        type=int,
+        help="Simulated seconds per coupling timestamp used for flame-graph simulation-clock hover labels.",
+    )
+    arg.add_argument(
+        "--simulation-start-datetime",
+        type=str,
+        help="Optional ISO model datetime corresponding to coupling timestamp 1 in this trace.",
+    )
+    arg.add_argument(
+        "--simulation-calendar",
+        type=str,
+        choices=("gregorian", "noleap", "no_leap"),
+        help="Model calendar used by --simulation-start-datetime.",
+    )
+    arg.add_argument(
         "--max-workers",
         type=int,
         help="Override the maximum number of workers for parallel processing from config (default: number of CPUs)",

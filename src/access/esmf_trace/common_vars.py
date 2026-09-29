@@ -19,6 +19,9 @@ RUN_DEFAULT_KEYS = [
     "max_depth",
     "merge_gap_ns",
     "max_workers",
+    "coupling_timestep_seconds",
+    "simulation_start_datetime",
+    "simulation_calendar",
 ]
 
 POST_SUMMARY_DEFAULT_KEYS = [
