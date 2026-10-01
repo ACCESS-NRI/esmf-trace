@@ -47,7 +47,7 @@ On Gadi, load the ACCESS-NRI module before using **esmf-trace**:
 
 ```bash
 module use /g/data/vk83/modules
-module load model-tools/babeltrace2/2.1.2
+module load model-tools/babeltrace2/2.1.2-2
 ```
 
 ### Gadi development environment

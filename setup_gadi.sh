@@ -7,7 +7,7 @@ set -euo pipefail
 # source activate_gadi.sh
 
 module use /g/data/vk83/modules
-module load model-tools/babeltrace2/2.1.2
+module load model-tools/babeltrace2/2.1.2-2
 
 # Create venv and install
 python3 -m venv .venv
