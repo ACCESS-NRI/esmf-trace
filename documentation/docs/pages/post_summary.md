@@ -28,7 +28,7 @@ Each run's `name` must match a subdirectory of `post_base_path` laid out as:
 ```
 
 !!! warning Unrecognised keys
-    Unrecognised keys are rejected rather than ignored, so a typo fails immediately with an error naming the offending key and listing the valid ones. Keys that belong to a *run* config (`stream_prefix`, `cmap`, ...) are rejected here too - they have no effect in a post-summary config, and accepting them would imply otherwise.
+    Unrecognised keys are rejected rather than ignored, so a typo fails immediately with an error naming the offending key and listing the valid ones. Keys that belong to a *run* config (`stream_prefix`, `max_depth`, ...) are rejected here too - they have no effect in a post-summary config, and accepting them would imply otherwise.
 
 Post-summary reads the `*_timeseries.json` files that `run-from-yaml` already wrote. It can only select from what those files contain — `model_component` and `pets` are filters over existing rows, not a request to go back to the raw trace.
 

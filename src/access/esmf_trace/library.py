@@ -2,7 +2,7 @@ import re
 from pathlib import Path
 
 from .batch_runs import BatchResult, run_batch_jobs
-from .config import _norm_pets, load_post_summary_config, load_run_config
+from .config import SimulationCalendar, _norm_pets, load_post_summary_config, load_run_config
 from .postprocess import post_summary_from_yaml
 from .utils import normalise_str_list
 
@@ -70,10 +70,6 @@ class ACCESSRunConfigBuilder:
     DEFAULT_SETTINGS: dict = {
         "stream_prefix": "esmf_stream",
         "xaxis_datetime": False,
-        "separate_plots": False,
-        "cmap": "tab10",
-        "renderer": "browser",
-        "show_html": False,
     }
 
     def __init__(
@@ -82,10 +78,13 @@ class ACCESSRunConfigBuilder:
         post_base_path: str | Path,
         exact_paths: list[Path],
         model_component: str | list[str],
+        coupling_timestep_seconds: int,
+        simulation_calendar: SimulationCalendar,
         branch_pattern: re.Pattern[str] | None = None,
         pets_components: list[str] | None = None,
         pets_prefix: str = "0",
         max_workers: int = 4,
+        simulation_start_datetime: str | None = None,
         default_overwrite: dict | None = None,
     ) -> None:
         """
@@ -99,6 +98,9 @@ class ACCESSRunConfigBuilder:
         pets_prefix: str, prefix for pets string (default "0")
         max_workers: number of parallel workers to use for postprocessing default 4 for login nodes
         default_overwrite: Extra default_settings entries, which must be DefaultSettings fields (eg {"max_depth": 8}).
+        coupling_timestep_seconds: The number of seconds per coupling timestep.
+        simulation_calendar: The calendar to use for the simulation.
+        simulation_start_datetime: The datetime to start the simulation.
         """
         # core run list
         self.branches = branches
@@ -108,6 +110,9 @@ class ACCESSRunConfigBuilder:
         self.post_base_path = Path(post_base_path)
         self.model_component = model_component
         self.max_workers = max_workers
+        self.coupling_timestep_seconds = coupling_timestep_seconds
+        self.simulation_calendar = simulation_calendar
+        self.simulation_start_datetime = simulation_start_datetime
 
         # pet configuration
         self.branch_pattern = branch_pattern
@@ -119,6 +124,10 @@ class ACCESSRunConfigBuilder:
         if default_overwrite:
             self.default_settings.update(default_overwrite)
         self.default_settings["max_workers"] = self.max_workers
+        self.default_settings["coupling_timestep_seconds"] = self.coupling_timestep_seconds
+        self.default_settings["simulation_calendar"] = self.simulation_calendar
+        if self.simulation_start_datetime is not None:
+            self.default_settings["simulation_start_datetime"] = self.simulation_start_datetime
 
         self._validate()
 
@@ -134,6 +143,16 @@ class ACCESSRunConfigBuilder:
 
         if self.pets_components is not None and self.branch_pattern is None:
             raise ValueError("branch_pattern must be provided if pets_components is provided.")
+
+        if (
+            isinstance(self.coupling_timestep_seconds, bool)
+            or not isinstance(self.coupling_timestep_seconds, int)
+            or self.coupling_timestep_seconds <= 0
+        ):
+            raise ValueError("coupling_timestep_seconds must be an int > 0")
+
+        if self.simulation_calendar not in ("gregorian", "no_leap"):
+            raise ValueError("simulation_calendar must be one of: gregorian, no_leap")
 
     def _parse_layouts(self) -> list[dict[str, int]]:
         """

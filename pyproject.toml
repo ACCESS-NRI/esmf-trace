@@ -19,7 +19,6 @@ dependencies = [
   "psutil",
   "pandas",
   "plotly",
-  "matplotlib",
   "ruamel.yaml",
   "pyarrow",
 ]

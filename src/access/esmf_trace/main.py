@@ -50,24 +50,20 @@ def _add_run_overrides(parser: argparse.ArgumentParser) -> None:
         help="Override to enable datetime x-axis in flame graph from config (default: False)",
     )
     arg.add_argument(
-        "--separate-plots",
-        action="store_true",
-        help="Override to enable separate flame graph plots per pet from config (default: False)",
+        "--coupling-timestep-seconds",
+        type=int,
+        help="Override the required simulated seconds per coupling timestamp from config.",
     )
     arg.add_argument(
-        "--cmap",
+        "--simulation-start-datetime",
         type=str,
-        help="Override the matplotlib colormap for flame graph from config (default: tab10)",
+        help="Optional ISO model datetime corresponding to coupling timestamp 1 in this trace.",
     )
     arg.add_argument(
-        "--renderer",
+        "--simulation-calendar",
         type=str,
-        help="Override the plotly renderer for flame graph from config (default: browser)",
-    )
-    arg.add_argument(
-        "--show-html",
-        action="store_true",
-        help="Override to open the flame graph html in a browser after generation (default: False)",
+        choices=("gregorian", "no_leap"),
+        help="Override the required simulation calendar from config. Valid values: gregorian, no_leap.",
     )
     arg.add_argument(
         "--max-workers",

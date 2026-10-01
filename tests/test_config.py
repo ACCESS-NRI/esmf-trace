@@ -23,6 +23,15 @@ def _base_post_summary_data(**default_overrides):
     }
 
 
+def _base_run_defaults(**overrides):
+    default_settings = {
+        "coupling_timestep_seconds": 900,
+        "simulation_calendar": "gregorian",
+    }
+    default_settings.update(overrides)
+    return default_settings
+
+
 class TestNormPets:
     def test_none(self):
         assert _norm_pets(None) is None
@@ -99,7 +108,7 @@ class TestUnknownKeyRejection:
         with pytest.raises(ConfigError, match="valid keys:.*include_combined"):
             parse_post_summary_config(data)
 
-    @pytest.mark.parametrize("key", ["stream_prefix", "cmap", "max_depth", "renderer"])
+    @pytest.mark.parametrize("key", ["stream_prefix", "max_depth"])
     def test_run_config_keys_are_rejected_not_silently_ignored(self, key):
         # these mean something in a run config but nothing here; accepting
         # them would imply they have an effect.
@@ -250,7 +259,7 @@ class TestLoadYamlConfigDispatch:
         yaml_path = tmp_path / "run.yaml"
         write_yaml(
             {
-                "default_settings": {},
+                "default_settings": _base_run_defaults(),
                 "runs": [{"run_base": "/x"}],
             },
             yaml_path,
@@ -262,7 +271,10 @@ class TestLoadYamlConfigDispatch:
         yaml_path = tmp_path / "run.yaml"
         write_yaml(
             {
-                "default_settings": {"post_base_path": "/base", "max_depth": 3},
+                "default_settings": _base_run_defaults(
+                    post_base_path="/base",
+                    max_depth=3,
+                ),
                 "runs": [{"exact_path": "/some/exact/path"}],
             },
             yaml_path,
@@ -270,6 +282,8 @@ class TestLoadYamlConfigDispatch:
         defaults, runs = load_yaml_config(yaml_path, kind="run")
         assert defaults.max_depth == 3
         assert defaults.merge_gap_ns == 1000
+        assert defaults.coupling_timestep_seconds == 900
+        assert defaults.simulation_calendar == "gregorian"
         assert runs[0].exact_path == Path("/some/exact/path")
 
     def test_invalid_kind_raises_value_error(self, tmp_path):
@@ -288,8 +302,11 @@ class TestParseRunConfig:
 
     def _data(self, default=None, runs=None):
         return {
-            "default_settings": {"post_base_path": "/base", **(default or {})},
-            "runs": runs if runs is not None else [{"exact_path": "/x", "base_prefix": "p"}],
+            "default_settings": _base_run_defaults(
+                post_base_path="/base",
+                **(default or {}),
+            ),
+            "runs": (runs if runs is not None else [{"exact_path": "/x", "base_prefix": "p"}]),
         }
 
     def test_valid_config_parses(self):
@@ -339,33 +356,118 @@ class TestParseRunConfig:
 
     def test_no_post_base_path_anywhere_is_rejected(self):
         with pytest.raises(ConfigError, match="post_base_path"):
-            parse_run_config({"default_settings": {}, "runs": [{"exact_path": "/x"}]})
+            parse_run_config(
+                {
+                    "default_settings": _base_run_defaults(),
+                    "runs": [{"exact_path": "/x"}],
+                }
+            )
 
     def test_a_run_may_supply_its_own_post_base_path(self):
         _, runs = parse_run_config(
-            {"default_settings": {}, "runs": [{"exact_path": "/x", "post_base_path": "/own"}]},
+            {
+                "default_settings": _base_run_defaults(),
+                "runs": [{"exact_path": "/x", "post_base_path": "/own"}],
+            }
         )
         assert runs[0].post_base_path == "/own"
+
+    def test_coupling_timestep_seconds_is_required(self):
+        data = self._data()
+        del data["default_settings"]["coupling_timestep_seconds"]
+
+        with pytest.raises(ConfigError, match="coupling_timestep_seconds"):
+            parse_run_config(data)
+
+    def test_simulation_calendar_is_required(self):
+        data = self._data()
+        del data["default_settings"]["simulation_calendar"]
+
+        with pytest.raises(ConfigError, match="simulation_calendar"):
+            parse_run_config(data)
+
+    @pytest.mark.parametrize(
+        "value",
+        [None, 0, -1, 1.5, "900", True],
+    )
+    def test_invalid_coupling_timestep_seconds_is_rejected(self, value):
+        with pytest.raises(ConfigError, match="coupling_timestep_seconds"):
+            parse_run_config(self._data({"coupling_timestep_seconds": value}))
+
+    @pytest.mark.parametrize(
+        "calendar",
+        [
+            "noleap",
+            "standard",
+            "NO_LEAP",
+            "no-leap",
+            "",
+        ],
+    )
+    def test_invalid_simulation_calendar_is_rejected(
+        self,
+        calendar,
+    ):
+        with pytest.raises(ConfigError, match="simulation_calendar"):
+            parse_run_config(self._data({"simulation_calendar": calendar}))
+
+    @pytest.mark.parametrize(
+        "calendar",
+        ["gregorian", "no_leap"],
+    )
+    def test_supported_simulation_calendar_is_accepted(self, calendar):
+        defaults, _ = parse_run_config(self._data({"simulation_calendar": calendar}))
+        assert defaults.simulation_calendar == calendar
+
+    def test_simulation_start_datetime_remains_optional(self):
+        defaults, _ = parse_run_config(self._data())
+        assert defaults.simulation_start_datetime is None
 
 
 class TestLoadRunConfig:
     def test_accepts_a_yaml_path(self, tmp_path):
         path = tmp_path / "run.yaml"
-        write_yaml({"default_settings": {"post_base_path": "/base"}, "runs": [{"exact_path": "/x"}]}, path)
+        write_yaml(
+            {
+                "default_settings": _base_run_defaults(
+                    post_base_path="/base",
+                ),
+                "runs": [{"exact_path": "/x"}],
+            },
+            path,
+        )
+
         defaults, runs = load_run_config(path)
+
         assert defaults.post_base_path == "/base"
+        assert defaults.coupling_timestep_seconds == 900
+        assert defaults.simulation_calendar == "gregorian"
         assert len(runs) == 1
 
     def test_accepts_an_equivalent_dict(self):
         defaults, runs = load_run_config(
-            {"default_settings": {"post_base_path": "/base"}, "runs": [{"exact_path": "/x"}]}
+            {
+                "default_settings": _base_run_defaults(
+                    post_base_path="/base",
+                ),
+                "runs": [{"exact_path": "/x"}],
+            }
         )
+
         assert defaults.post_base_path == "/base"
+        assert defaults.coupling_timestep_seconds == 900
+        assert defaults.simulation_calendar == "gregorian"
         assert len(runs) == 1
 
     def test_a_dict_config_is_validated_like_a_yaml_one(self):
         """The dict form is what ACCESSRunConfigBuilder emits; it used to skip every check."""
         with pytest.raises(ConfigError, match="max_dpeth"):
             load_run_config(
-                {"default_settings": {"post_base_path": "/b", "max_dpeth": 9}, "runs": [{"exact_path": "/x"}]}
+                {
+                    "default_settings": _base_run_defaults(
+                        post_base_path="/b",
+                        max_dpeth=9,
+                    ),
+                    "runs": [{"exact_path": "/x"}],
+                }
             )

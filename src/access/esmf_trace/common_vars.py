@@ -10,8 +10,6 @@ config_kind = Literal["run", "post-summary"]
 RUN_DEFAULT_FLAG_KEYS = [
     "merge_adjacent",
     "xaxis_datetime",
-    "separate_plots",
-    "show_html",
     "force",
 ]
 
@@ -20,9 +18,10 @@ RUN_DEFAULT_KEYS = [
     "model_component",
     "max_depth",
     "merge_gap_ns",
-    "cmap",
-    "renderer",
     "max_workers",
+    "coupling_timestep_seconds",
+    "simulation_start_datetime",
+    "simulation_calendar",
 ]
 
 POST_SUMMARY_DEFAULT_KEYS = [

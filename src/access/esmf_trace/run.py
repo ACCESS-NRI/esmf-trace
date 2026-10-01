@@ -56,10 +56,9 @@ def run(ns: argparse.Namespace) -> tuple[int, str]:
         df=df,
         pets=pet_list,
         xaxis_datetime=ns.xaxis_datetime,
-        separate_plots=ns.separate_plots,
-        cmap_name=ns.cmap,
-        renderer=ns.renderer,
-        show_html=ns.show_html,
+        coupling_timestep_seconds=ns.coupling_timestep_seconds,
+        simulation_calendar=ns.simulation_calendar,
+        simulation_start_datetime=ns.simulation_start_datetime,
         html_path=html_path,
     )
     # print(f"-- Saved flame graph html to: {html_path}")

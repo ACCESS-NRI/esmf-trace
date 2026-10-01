@@ -28,6 +28,8 @@ class TestACCESSRunConfigBuilder:
             "post_base_path": "/post/base",
             "exact_paths": ["/traceout/branch_1"],
             "model_component": "compA",
+            "coupling_timestep_seconds": 900,
+            "simulation_calendar": "gregorian",
         }
         defaults.update(kwargs)
         return ACCESSRunConfigBuilder(**defaults)
@@ -54,6 +56,9 @@ class TestACCESSRunConfigBuilder:
         assert config["default_settings"]["post_base_path"] == "/post/base"
         assert config["default_settings"]["model_component"] == ["compA"]
         assert config["runs"] == [{"exact_path": "/traceout/branch_1", "base_prefix": "branch_1"}]
+        assert config["default_settings"]["coupling_timestep_seconds"] == 900
+        assert config["default_settings"]["simulation_calendar"] == "gregorian"
+        assert "simulation_start_datetime" not in config["default_settings"]
 
     def test_build_config_with_pets_from_branch_pattern(self):
         builder = self._builder(
@@ -74,6 +79,14 @@ class TestACCESSRunConfigBuilder:
         )
         with pytest.raises(ValueError, match="layout pattern"):
             builder.build_config()
+
+    def test_coupling_timestep_seconds_must_be_positive(self):
+        with pytest.raises(ValueError, match="coupling_timestep_seconds"):
+            self._builder(coupling_timestep_seconds=0)
+
+    def test_simulation_calendar_must_be_supported(self):
+        with pytest.raises(ValueError, match="simulation_calendar"):
+            self._builder(simulation_calendar="noleap")
 
 
 class TestACCESSPostSummaryConfigBuilder:
