@@ -12,9 +12,10 @@ The generated `flamegraph` html file is written alongside the corresponding `run
 
 The HTML is self-contained, including `Plotly`, so it can be copied elsewhere and opened directly in a browser. If the file is on a remote system such as Gadi, its directory can also be served with `python3 -m http.server 8000` and accessed through the appropriate remote-session or port-forwarding setup.
 
+
 ## ESMF trace explorer overview
 
-The screenshot below shows the default ESMF Trace Explorer layout. An example html - mom6_496_cice_24_all_flamegraph.html can be found under `esmf-trace/examples`.
+The screenshot below shows the default ESMF Trace Explorer layout. An example html - `flamegraph.html` can be found under `esmf-trace/examples`.
 
 ![flame-graph-demonstration](/assets/flame_graph_demonstration.png){: loading="lazy" }
 
@@ -52,6 +53,7 @@ The detailed selector also contains a search box. This search only filters the o
 !!! tip "Start broad, then refine"
     Start with a phase group such as **Run phase** or **Coupling**, then open the detailed menu only when an individual model component or phase needs to be isolated.
 
+
 ## Filtering by stack depth
 
 In the above screenshot, this is the second selector row, directly above the plot. Its chips decide which `Depth N · PET M` rows appear on the Y axis.
@@ -78,6 +80,7 @@ No timing regions match the current phase/component/depth selection.
 
 The Y axis is fixed while zooming. Zooming therefore changes the time range only; stack-depth labels remain visible.
 
+
 ## Zooming and Reset view
 
 Use the `Plotly` zoom controls, drag across the plot, or scroll within the timeline panel to zoom the **X axis**.
@@ -102,6 +105,7 @@ data: OCN · RunPhase1 only
 
 !!! warning "standard plotly autoscale/reset-axis"
     The standard `Plotly` autoscale/reset-axis controls are intentionally not used for this view because their normal behaviour is to fit the currently visible data. That is different from the explorer's definition of returning to the complete trace time domain.
+
 
 ## Searching timing regions
 
@@ -128,6 +132,7 @@ ICE · RunPhase1
 ...
 ```
 
+
 ## Hover information
 
 Hover over a timing span to inspect its full provenance and timing information. The explorer shows:
@@ -142,6 +147,7 @@ Hover over a timing span to inspect its full provenance and timing information. 
 
 !!!tip "Simulation timing"
     Simulation timing is derived from the recurring coupling cycles using `coupling_timestep_seconds` and `simulation_calendar`. It describes model simulation time rather than the wall-clock time taken to execute the span.
+
 
 ## How filters combine
 
@@ -168,6 +174,7 @@ shows regions satisfying all three filter dimensions.
 
 Filtering changes region visibility in a single `Plotly` update and does not rebuild the span data or modify the current X-axis zoom.
 
+
 ## Interpreting the trace explorer
 
 The trace explorer is useful for understanding **when** work occurs and how timing regions are nested.
@@ -184,16 +191,6 @@ Typical uses include:
 
 The trace explorer should not by itself be interpreted as a scaling statistic. For aggregate timing comparisons across calls, outputs or experiments, use the timeseries and post-summary functionality alongside the trace explorer.
 
-## Output size and responsiveness
-
-Large ESMF traces can contain tens of thousands of spans and hundreds of logical regions. The explorer is structured to avoid duplicating the complete timing path for every span:
-
-- one `Plotly` trace is retained per logical timing region;
-- the complete path is stored once in trace metadata;
-- the legend is replaced by the phase-first selector; and
-- one Plotly update is used for each filtering interaction.
-
-This keeps the HTML substantially smaller and the interactive filtering more responsive than rendering hundreds of traditional legend entries.
 
 ## Library usage
 
