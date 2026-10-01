@@ -31,6 +31,23 @@ From top to bottom, the page is organised into five main areas:
     Stack depth describes where a timing region sits in the nested ESMF trace hierarchy. It is not a model vertical level and is unrelated to ocean, atmosphere or sea-ice grid depth.
 
 
+## Interpreting the trace explorer
+
+The Trace Explorer shows **when** work occurs during an ESMF run and how timing regions are nested in the trace hierarchy. Each horizontal bar represents one timing span, positioned according to when that work occurred.
+
+Typical uses include:
+
+- locating expensive or repeated model run phases;
+- comparing `ATM`, `OCN`, `ICE`, `MED` and `ROF` activity over the same time interval;
+- inspecting directional coupling costs;
+- separating initialisation/finalisation overhead from steady-state run work;
+- finding mediator preparation, diagnostics or I/O regions;
+- comparing the same region across selected PETs;
+- zooming into a short interval while preserving the surrounding stack structure.
+
+The Trace Explorer should not by itself be interpreted as a scaling statistic. For aggregate timing comparisons across calls, outputs or experiments, use the timeseries and post-summary functionality alongside the Trace Explorer.
+
+
 ## Selecting phase groups and regions
 
 The **Phase / region group** row controls which timing regions are visible.
@@ -173,23 +190,6 @@ Search box:  RunPhase
 shows regions satisfying all three filter dimensions.
 
 Filtering changes region visibility in a single `Plotly` update and does not rebuild the span data or modify the current X-axis zoom.
-
-
-## Interpreting the trace explorer
-
-The trace explorer is useful for understanding **when** work occurs and how timing regions are nested.
-
-Typical uses include:
-
-- locating expensive or repeated model run phases;
-- comparing `ATM`, `OCN`, `ICE`, `MED` and `ROF` activity over the same time interval;
-- inspecting directional coupling costs;
-- separating initialisation/finalisation overhead from steady-state run work;
-- finding mediator preparation, diagnostics or I/O regions;
-- comparing the same region across selected PETs; and
-- zooming into a short interval while preserving the surrounding stack structure.
-
-The trace explorer should not by itself be interpreted as a scaling statistic. For aggregate timing comparisons across calls, outputs or experiments, use the timeseries and post-summary functionality alongside the trace explorer.
 
 
 ## Library usage
