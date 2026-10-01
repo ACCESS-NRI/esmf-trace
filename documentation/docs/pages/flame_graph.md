@@ -79,7 +79,7 @@ In the above screenshot, this is the second selector row, directly above the plo
 
 For example:
 
-```yaml
+```text
 Phase / region group: OCN · RunPhase1
 Stack depth: 3
 ```
