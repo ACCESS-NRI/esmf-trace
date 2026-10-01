@@ -1,4 +1,4 @@
-# Flame graph
+# Flame graph visualisation
 
 `esmf-trace` writes an interactive flame graph for every processed outputNNN directory. The flame graph is presented as the `ESMF Trace Explorer`: a phase-first view of the `ESMF/NUOPC` timing hierarchy that is designed to remain usable when a trace contains hundreds of timing regions.
 
