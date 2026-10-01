@@ -15,7 +15,7 @@ The HTML is self-contained, including `Plotly`, so it can be copied elsewhere an
 
 ## ESMF trace explorer overview
 
-The screenshot below shows the default ESMF Trace Explorer layout. An example html - `flamegraph.html` can be found under `esmf-trace/examples`.
+The screenshot below shows the default ESMF Trace Explorer layout. An example `flamegraph.html` can be found under `esmf-trace/examples`.
 
 ![flame-graph-demonstration](/assets/flame_graph_demonstration.png){: loading="lazy" }
 
