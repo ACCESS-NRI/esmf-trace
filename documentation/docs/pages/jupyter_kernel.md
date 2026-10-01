@@ -32,7 +32,7 @@ Expand **Advanced options** and fill in three fields:
 | Field | Value |
 | ----- | ----- |
 | **Module directories** | `/g/data/vk83/modules` |
-| **Modules** | `model-tools/babeltrace2/2.1.2` |
+| **Modules** | `model-tools/babeltrace2/2.1.2-2` |
 | **Python or Conda virtual environment base** | `/path/to/esmf-trace/.venv` |
 
 ![ARE-module-selection](/assets/ARE-module-selection.png){: loading="lazy" }
@@ -41,7 +41,7 @@ Together these three fields are the ARE equivalent of what [`activate_gadi.sh`](
 
 ```bash
 module use /g/data/vk83/modules
-module load model-tools/babeltrace2/2.1.2
+module load model-tools/babeltrace2/2.1.2-2
 source /path/to/esmf-trace/.venv/bin/activate
 ```
 

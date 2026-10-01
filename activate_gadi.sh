@@ -18,7 +18,7 @@ if [[ ! -d ".venv" ]]; then
 fi
 
 module use /g/data/vk83/modules
-module load model-tools/babeltrace2/2.1.2
+module load model-tools/babeltrace2/2.1.2-2
 
 source .venv/bin/activate
 

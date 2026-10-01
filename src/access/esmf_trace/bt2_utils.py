@@ -21,7 +21,7 @@ def _import_bt2():
     except Exception as e:
         raise RuntimeError(
             "Failed to import 'bt2'. Install Babeltrace2 with Python bindings first.\n"
-            " - On Gadi: module use /g/data/vk83/modules && module load model-tools/babeltrace2/2.1.2\n"
+            " - On Gadi: module use /g/data/vk83/modules && module load model-tools/babeltrace2/2.1.2-2\n"
         ) from e
     return bt2
 
