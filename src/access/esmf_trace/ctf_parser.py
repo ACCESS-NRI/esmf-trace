@@ -1,4 +1,5 @@
 import shutil
+import tarfile
 import tempfile
 from collections import defaultdict
 from contextlib import contextmanager
@@ -7,6 +8,7 @@ from pathlib import Path
 import pandas as pd
 
 from .bt2_utils import _import_bt2, event_ts_ns, is_event, parse_define_region, parse_region_transition
+from .utils import stream_file_archive_path
 
 
 def rows_from_bt2_iterator(it: iter, *, pet_whitelist: set[int] | None = None) -> list:
@@ -76,33 +78,104 @@ def rows_from_bt2_iterator(it: iter, *, pet_whitelist: set[int] | None = None) -
     return out
 
 
-@contextmanager
-def open_selected_streams(traceout_path: Path, stream_paths: iter):
+def _archive_members(archive: tarfile.TarFile) -> dict[str, tarfile.TarInfo]:
     """
-    Context manager to open a temporary bundle that includes:
-      - the original 'metadata'
-      - the selected stream files (symlinked by basename)
+    Return archive members indexed by filename.
+    """
+    return {member.name: member for member in archive.getmembers() if member.isfile()}
+
+
+def _read_streams(
+    traceout_path: Path,
+    stream_paths: list[Path],
+    pet_whitelist: set[int] | None,
+    stream_archive: tarfile.TarFile | None = None,
+    archive_members: dict[str, tarfile.TarInfo] | None = None,
+) -> list:
+    all_rows = []
+
+    for sp in stream_paths:
+        label = _suffix_int_from_stream_path(sp)
+
+        if pet_whitelist is not None and label not in pet_whitelist:
+            raise ValueError(
+                f"stream path {sp} has pet index {label} which is not in the pet whitelist {pet_whitelist}!"
+            )
+
+        with open_selected_streams(
+            traceout_path,
+            [sp],
+            stream_archive=stream_archive,
+            archive_members=archive_members,
+        ) as it:
+            rows = rows_from_bt2_iterator(
+                it,
+                pet_whitelist=None,
+            )
+
+            for row in rows:
+                row["pet"] = label
+
+            all_rows.extend(rows)
+
+    return all_rows
+
+
+@contextmanager
+def open_selected_streams(
+    traceout_path: Path,
+    stream_paths: iter,
+    stream_archive: tarfile.TarFile | None = None,
+    archive_members: dict[str, tarfile.TarInfo] | None = None,
+):
+    """
+    Open a temporary CTF bundle containing:
+        - the original metadata
+        - selected stream files
+
+    Loose stream files are symlinked. If a loose stream is not present,
+    it is extracted from the stream archive.
     """
     bt2 = _import_bt2()
     traceout_path = Path(traceout_path).expanduser().resolve()
-    meta = traceout_path / "metadata"
-    if not meta.is_file():
-        raise FileNotFoundError(f"traceout metadata not found at: {meta}")
+    metadata = traceout_path / "metadata"
+    if not metadata.is_file():
+        raise FileNotFoundError(f"traceout metadata not found at: {metadata}")
     streams = [Path(s).expanduser().resolve() for s in stream_paths]
     if not streams:
         raise ValueError("no stream paths provided!")
-    for s in streams:
-        if not s.is_file():
-            raise FileNotFoundError(f"stream file not found at: {s}")
 
     tmpdir = Path(tempfile.mkdtemp(prefix="ctf_stage_")).resolve()
     try:
-        # link metadata and the selected streams into the temp bundle
-        (tmpdir / "metadata").symlink_to(meta)
-        for s in streams:
-            (tmpdir / s.name).symlink_to(s)
+        (tmpdir / "metadata").symlink_to(metadata)
+
+        for stream in streams:
+            target = tmpdir / stream.name
+
+            # existing loose stream files
+            if stream.is_file():
+                target.symlink_to(stream)
+                continue
+
+            # otherwise read it from the already-open tar archive
+            if stream_archive is None or archive_members is None:
+                raise FileNotFoundError(f"stream file not found at: {stream}")
+
+            member = archive_members.get(stream.name)
+
+            if member is None:
+                raise FileNotFoundError(f"{stream.name} not found in {stream_archive.name}")
+
+            source = stream_archive.extractfile(member)
+
+            if source is None:
+                raise FileNotFoundError(f"could not read {stream.name} from {stream_archive.name}")
+
+            with source, target.open("wb") as destination:
+                shutil.copyfileobj(source, destination)
 
         yield bt2.TraceCollectionMessageIterator(str(tmpdir))
+
     finally:
         shutil.rmtree(tmpdir, ignore_errors=True)
 
@@ -125,6 +198,7 @@ def df_for_selected_streams(
     merge_adjacent: bool = False,
     merge_gap_ns: int = 1000,
     max_depth: int | None = None,
+    stream_prefix: str = "esmf_stream",
 ) -> pd.DataFrame:
     """
     cols = ["model_component", "start", "end", "duration_s", "depth", "pet"]
@@ -136,22 +210,28 @@ def df_for_selected_streams(
     else:
         pet_whitelist = set(pets)
 
-    all_rows = []
+    archive_path = stream_file_archive_path(
+        traceout_path,
+        stream_prefix,
+    )
 
-    for sp in stream_paths:
-        label = _suffix_int_from_stream_path(sp)
-        if pet_whitelist is not None and label not in pet_whitelist:
-            raise ValueError(
-                f"stream path {sp} has pet index {label} which is not in the pet whitelist {pet_whitelist}!"
+    if any(not stream.is_file() for stream in stream_paths) and archive_path.is_file():
+        with tarfile.open(archive_path, "r") as stream_archive:
+            archive_members = _archive_members(stream_archive)
+
+            all_rows = _read_streams(
+                traceout_path,
+                stream_paths,
+                pet_whitelist,
+                stream_archive,
+                archive_members,
             )
-
-        # parse from the iterator
-        with open_selected_streams(traceout_path, [sp]) as it:
-            rows = rows_from_bt2_iterator(it, pet_whitelist=None)
-
-            for r in rows:
-                r["pet"] = label
-            all_rows.extend(rows)
+    else:
+        all_rows = _read_streams(
+            traceout_path,
+            stream_paths,
+            pet_whitelist,
+        )
 
     cols = ["model_component", "start", "end", "duration_s", "depth", "pet"]
     df = pd.DataFrame(all_rows, columns=cols)
