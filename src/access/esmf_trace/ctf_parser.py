@@ -136,7 +136,6 @@ def open_selected_streams(
     Loose stream files are symlinked. If a loose stream is not present,
     it is extracted from the stream archive.
     """
-    bt2 = _import_bt2()
     traceout_path = Path(traceout_path).expanduser().resolve()
     metadata = traceout_path / "metadata"
     if not metadata.is_file():
@@ -145,8 +144,24 @@ def open_selected_streams(
     if not streams:
         raise ValueError("no stream paths provided!")
 
+    missing_stream = next((stream for stream in streams if not stream.is_file()), None)
+    if missing_stream is not None and stream_archive is None:
+        prefix = missing_stream.name.rsplit("_", 1)[0]
+        archive_path = stream_file_archive_path(traceout_path, prefix)
+        if archive_path.is_file():
+            with (
+                tarfile.open(archive_path, "r") as archive,
+                open_selected_streams(traceout_path, streams, archive) as iterator,
+            ):
+                yield iterator
+            return
+
+    bt2 = _import_bt2()
     tmpdir = Path(tempfile.mkdtemp(prefix="ctf_stage_")).resolve()
     try:
+        if stream_archive is not None and archive_members is None:
+            archive_members = _archive_members(stream_archive)
+
         (tmpdir / "metadata").symlink_to(metadata)
 
         for stream in streams:
