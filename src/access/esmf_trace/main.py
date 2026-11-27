@@ -50,6 +50,14 @@ def _add_run_overrides(parser: argparse.ArgumentParser) -> None:
         help="Override to enable datetime x-axis in flame graph from config (default: False)",
     )
     arg.add_argument(
+        "--staging-dir",
+        type=str,
+        help=(
+            "Override where streams are staged while read, unpacked from esmf_stream.tar if archived"
+            " (default: each job's post_dir; not TMPDIR, a small /jobfs on PBS jobs)"
+        ),
+    )
+    arg.add_argument(
         "--coupling-timestep-seconds",
         type=int,
         help="Override the required simulated seconds per coupling timestamp from config.",

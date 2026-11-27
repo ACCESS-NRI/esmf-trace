@@ -314,6 +314,11 @@ class TestParseRunConfig:
         assert defaults.max_depth == 3
         assert runs[0].exact_path == Path("/x")
 
+    def test_staging_dir_is_accepted(self):
+        defaults, _ = parse_run_config(self._data({"staging_dir": "/scratch/stage"}))
+        assert defaults.staging_dir == "/scratch/stage"
+        assert parse_run_config(self._data())[0].staging_dir is None
+
     def test_typo_in_default_settings_is_rejected(self):
         with pytest.raises(ConfigError, match="max_dpeth"):
             parse_run_config(self._data({"max_dpeth": 99}))

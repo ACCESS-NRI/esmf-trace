@@ -35,6 +35,11 @@ class DefaultSettings:
     max_depth: drop trace regions nested deeper than this.
     merge_adjacent, merge_gap_ns: merge consecutive spans.
     xaxis_datetime: use absolute trace timestamps on the X axis.
+    staging_dir: where a job stages the streams it reads, unpacking those it
+        reads from a stream archive (esmf_stream.tar). Default: the job's own
+        post_dir. Not TMPDIR: on a PBS job that is node-local /jobfs, often
+        small (100 MB for an interactive session), and PBS kills a job that
+        fills it. Does not change what a job writes.
     """
 
     coupling_timestep_seconds: int
@@ -50,6 +55,7 @@ class DefaultSettings:
     merge_gap_ns: int = 1000
     simulation_start_datetime: str | None = None
     force: bool = False
+    staging_dir: str | None = None
 
 
 @dataclass(frozen=True)
@@ -509,6 +515,7 @@ def parse_run_config(
             simulation_calendar=_norm_simulation_calendar(default["simulation_calendar"]),
             simulation_start_datetime=default.get("simulation_start_datetime"),
             force=bool(default.get("force", False)),
+            staging_dir=default.get("staging_dir"),
         )
     except (TypeError, ValueError) as e:
         raise ConfigError(f"invalid value in default_settings: {e}") from None

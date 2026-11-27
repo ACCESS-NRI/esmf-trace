@@ -91,6 +91,7 @@ def _read_streams(
     pet_whitelist: set[int] | None,
     stream_archive: tarfile.TarFile | None = None,
     archive_members: dict[str, tarfile.TarInfo] | None = None,
+    staging_dir: Path | None = None,
 ) -> list:
     all_rows = []
 
@@ -107,6 +108,7 @@ def _read_streams(
             [sp],
             stream_archive=stream_archive,
             archive_members=archive_members,
+            staging_dir=staging_dir,
         ) as it:
             rows = rows_from_bt2_iterator(
                 it,
@@ -127,6 +129,7 @@ def open_selected_streams(
     stream_paths: iter,
     stream_archive: tarfile.TarFile | None = None,
     archive_members: dict[str, tarfile.TarInfo] | None = None,
+    staging_dir: Path | None = None,
 ):
     """
     Open a temporary CTF bundle containing:
@@ -135,6 +138,10 @@ def open_selected_streams(
 
     Loose stream files are symlinked. If a loose stream is not present,
     it is extracted from the stream archive.
+
+    The bundle is made in staging_dir (created if missing), or in tempfile's
+    default (TMPDIR) when it is None, and removed afterwards. An extracted
+    stream takes its full size there while it is read.
     """
     traceout_path = Path(traceout_path).expanduser().resolve()
     metadata = traceout_path / "metadata"
@@ -151,13 +158,15 @@ def open_selected_streams(
         if archive_path.is_file():
             with (
                 tarfile.open(archive_path, "r") as archive,
-                open_selected_streams(traceout_path, streams, archive) as iterator,
+                open_selected_streams(traceout_path, streams, archive, staging_dir=staging_dir) as iterator,
             ):
                 yield iterator
             return
 
     bt2 = _import_bt2()
-    tmpdir = Path(tempfile.mkdtemp(prefix="ctf_stage_")).resolve()
+    if staging_dir is not None:
+        Path(staging_dir).mkdir(parents=True, exist_ok=True)
+    tmpdir = Path(tempfile.mkdtemp(prefix="ctf_stage_", dir=staging_dir)).resolve()
     try:
         if stream_archive is not None and archive_members is None:
             archive_members = _archive_members(stream_archive)
@@ -214,9 +223,12 @@ def df_for_selected_streams(
     merge_gap_ns: int = 1000,
     max_depth: int | None = None,
     stream_prefix: str = "esmf_stream",
+    staging_dir: Path | None = None,
 ) -> pd.DataFrame:
     """
     cols = ["model_component", "start", "end", "duration_s", "depth", "pet"]
+
+    staging_dir: where the streams are staged while read (see open_selected_streams).
     """
     if pets is None:
         pet_whitelist = None
@@ -240,12 +252,14 @@ def df_for_selected_streams(
                 pet_whitelist,
                 stream_archive,
                 archive_members,
+                staging_dir,
             )
     else:
         all_rows = _read_streams(
             traceout_path,
             stream_paths,
             pet_whitelist,
+            staging_dir=staging_dir,
         )
 
     cols = ["model_component", "start", "end", "duration_s", "depth", "pet"]

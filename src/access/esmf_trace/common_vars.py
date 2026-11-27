@@ -22,6 +22,7 @@ RUN_DEFAULT_KEYS = [
     "coupling_timestep_seconds",
     "simulation_start_datetime",
     "simulation_calendar",
+    "staging_dir",
 ]
 
 POST_SUMMARY_DEFAULT_KEYS = [

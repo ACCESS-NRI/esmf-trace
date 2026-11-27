@@ -295,7 +295,11 @@ def run_batch_jobs(defaults: DefaultSettings, runs: list[RunSettings]) -> BatchR
 
             post_dir.mkdir(parents=True, exist_ok=True)
 
-            jobs.append(_Job(_build_namespace(job_kwargs), label, post_dir, fingerprint))
+            # where the job stages its streams; outside the fingerprint, as it does not change what a job writes
+            staging_dir = Path(defaults.staging_dir).expanduser() if defaults.staging_dir else post_dir
+            jobs.append(
+                _Job(_build_namespace({**job_kwargs, "staging_dir": staging_dir}), label, post_dir, fingerprint)
+            )
 
     if not jobs:
         print("-- No jobs to run. All done or nothing to do.")
