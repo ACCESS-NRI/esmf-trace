@@ -1,7 +1,12 @@
+import json
+
 import pandas as pd
 import pytest
 
-from access.esmf_trace.coupling import coupling_steps
+from access.esmf_trace.coupling import (
+    coupling_steps,
+    coupling_steps_for_case,
+)
 
 RUN = "[ESMF]/[ensemble] RunPhase1/[ESM0001] RunPhase1"
 NS = 1_000_000_000
@@ -139,3 +144,30 @@ def test_unequal_event_counts_raise():
     df = df.drop(df[(df["pet"] == 1) & df["model_component"].str.endswith("[OCN] RunPhase1")].index[-1])
     with pytest.raises(ValueError, match="Unequal coupling event counts"):
         coupling_steps(df)
+
+
+def test_steps_for_case(tmp_path):
+    for index in (0, 1):
+        out = tmp_path / "postprocessing_case" / f"output{index:03d}"
+        out.mkdir(parents=True)
+        rows = _timeseries({"OCN": [1.0, 3.0, 1.0]}).to_dict("records")
+        (out / "case_timeseries.json").write_text(json.dumps(rows))
+
+    steps = coupling_steps_for_case(tmp_path, "postprocessing_case")
+    assert steps["output_name"].tolist() == ["output000"] * 2 + ["output001"] * 2
+    assert set(steps["case_name"]) == {"postprocessing_case"}
+
+    with pytest.raises(FileNotFoundError):
+        coupling_steps_for_case(tmp_path, "missing")
+
+
+def test_steps_for_case_keeps_output_order(tmp_path):
+    # payu goes on from output999 to output1000, which sorts before output999 as text
+    for index in (999, 1000):
+        out = tmp_path / "postprocessing_case" / f"output{index:03d}"
+        out.mkdir(parents=True)
+        rows = _timeseries({"OCN": [1.0, 3.0, 1.0]}).to_dict("records")
+        (out / "case_timeseries.json").write_text(json.dumps(rows))
+
+    steps = coupling_steps_for_case(tmp_path, "postprocessing_case")
+    assert steps["output_name"].unique().tolist() == ["output999", "output1000"]

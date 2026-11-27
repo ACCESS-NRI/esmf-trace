@@ -33,12 +33,14 @@ comparison across nodes is needed.
 """
 
 import re
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
 
 from .common_vars import seconds_to_nanoseconds
 from .config import _norm_pets
+from .postprocess import _collect_case_jsons, _load_timeseries_json
 
 _TAG_RE = re.compile(r"^\[([^\]]+)\]")
 _DRIVER_RUN_RE = re.compile(r"^\[ESM\d+\] RunPhase\d+$")
@@ -198,4 +200,27 @@ def coupling_steps(
         comp_pets = _select_pets(pets.get(comp), concurrent[comp], comp)
         steps = _component_steps(events, comp, comp_pets, med_pets)
         parts.append(steps.iloc[slice(start_index, end_index)])
+    return pd.concat(parts, ignore_index=True)
+
+
+def coupling_steps_for_case(
+    post_base_path: str | Path,
+    case_name: str,
+    output_index: list[int] | None = None,
+    timeseries_suffix: str = "_timeseries.json",
+    **kwargs,
+) -> pd.DataFrame:
+    """
+    coupling_steps() for every outputNNN of one postprocessed case, stacked
+    with case_name and output_name columns. kwargs go to coupling_steps(),
+    and are applied to each output separately.
+    """
+    jsons = _collect_case_jsons(Path(post_base_path), case_name, output_index, timeseries_suffix)
+    if not jsons:
+        raise FileNotFoundError(f"No *{timeseries_suffix} under {Path(post_base_path) / case_name}")
+    parts = []
+    for path in jsons:  # already in output-index order
+        ts = _load_timeseries_json(path)
+        steps = coupling_steps(ts, **kwargs)
+        parts.append(steps.assign(case_name=case_name, output_name=ts["__output_name"].iloc[0]))
     return pd.concat(parts, ignore_index=True)
