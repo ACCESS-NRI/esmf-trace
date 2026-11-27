@@ -6,6 +6,7 @@ import pytest
 from access.esmf_trace.coupling import (
     coupling_steps,
     coupling_steps_for_case,
+    coupling_summary,
 )
 
 RUN = "[ESMF]/[ensemble] RunPhase1/[ESM0001] RunPhase1"
@@ -144,6 +145,25 @@ def test_unequal_event_counts_raise():
     df = df.drop(df[(df["pet"] == 1) & df["model_component"].str.endswith("[OCN] RunPhase1")].index[-1])
     with pytest.raises(ValueError, match="Unequal coupling event counts"):
         coupling_steps(df)
+
+
+def test_summary():
+    steps = coupling_steps(_timeseries({"OCN": OCN_WORK, "WAV": [0.5] * 5}))
+    summary = coupling_summary(steps, coupling_timestep_seconds={"OCN": 3600, "WAV": 1800}, ncpus=10)
+
+    assert summary.index.tolist() == ["OCN", "WAV"]
+    ocn = summary.loc["OCN"]
+    assert ocn["seconds_per_sim_day"] == pytest.approx(steps.loc[steps["component"] == "OCN", "walltime_s"].mean() * 24)
+    assert ocn["core_hours_per_sim_year"] == pytest.approx(10 * ocn["seconds_per_sim_day"] * 365 / 3600)
+    assert summary.loc["WAV", "seconds_per_sim_day"] == pytest.approx(2 * ocn["seconds_per_sim_day"])
+
+    # 3 s ocean steps outrun the 2.1 s window by 0.9 s; the window outruns the 1 s steps by 1.1 s
+    assert ocn["idle_on_component_s"] == pytest.approx(1.8 / 4)
+    assert ocn["idle_on_med_s"] == pytest.approx(2.2 / 4)
+    assert ocn["idle_on_component_steps"] == ocn["idle_on_med_steps"] == 2
+    # WAV is never longer than its MED-side window
+    assert summary.loc["WAV", "idle_on_med_steps"] == 4
+    assert summary.loc["WAV", "idle_on_component_steps"] == 0
 
 
 def test_steps_for_case(tmp_path):

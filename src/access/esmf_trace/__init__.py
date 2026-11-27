@@ -8,7 +8,11 @@ from importlib.metadata import PackageNotFoundError, version
 with suppress(PackageNotFoundError):
     __version__ = version("esmf_trace")
 
-from access.esmf_trace.coupling import coupling_steps, coupling_steps_for_case
+from access.esmf_trace.coupling import (
+    coupling_steps,
+    coupling_steps_for_case,
+    coupling_summary,
+)
 from access.esmf_trace.library import (
     ACCESSPostSummaryConfigBuilder,
     ACCESSRunConfigBuilder,
@@ -23,4 +27,5 @@ __all__ = [
     "ACCESSPostSummaryConfigBuilder",
     "coupling_steps",
     "coupling_steps_for_case",
+    "coupling_summary",
 ]

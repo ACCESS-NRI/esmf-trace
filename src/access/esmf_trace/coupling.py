@@ -224,3 +224,59 @@ def coupling_steps_for_case(
         steps = coupling_steps(ts, **kwargs)
         parts.append(steps.assign(case_name=case_name, output_name=ts["__output_name"].iloc[0]))
     return pd.concat(parts, ignore_index=True)
+
+
+def coupling_summary(
+    steps: pd.DataFrame,
+    coupling_timestep_seconds: float | dict[str, float] | None = None,
+    ncpus: int | None = None,
+    days_per_year: float = 365.0,
+) -> pd.DataFrame:
+    """
+    Summarise coupling_steps() output, one row per component: who waits for
+    whom, and how much walltime each side could still recover.
+
+    walltime_mean_s, active_mean_s, med_concurrent_mean_s, med_serial_mean_s:
+        mean per step of the matching coupling_steps() column.
+    idle_on_med_s / idle_on_component_s: mean seconds per step that the
+        component sat idle because the MED side's overlapping work
+        (med_concurrent_s) ran past its own (active_s), and the reverse. Only
+        one of the two is non-zero in any step. Each is the upper bound on
+        what that side would save if it took no time, i.e. on what giving it
+        more PETs can buy; serial MED work and transfers are excluded.
+    idle_on_med_steps / idle_on_component_steps: number of steps in which
+        that idle time is non-zero, i.e. that side's overlapping work was the
+        longer one. The mean gap when it happens is
+        idle_on_*_s * n_steps / idle_on_*_steps.
+    seconds_per_sim_day: when coupling_timestep_seconds is given - one value,
+        or a {component: seconds} dict when components couple at different
+        intervals. core_hours_per_sim_year additionally needs ncpus (the whole
+        job's allocation, which the trace cannot tell).
+    """
+    rows = []
+    for comp, s in steps.groupby("component", sort=False):
+        idle_on_med = (s["med_concurrent_s"] - s["active_s"]).clip(lower=0)
+        idle_on_component = (s["active_s"] - s["med_concurrent_s"]).clip(lower=0)
+        row = {
+            "component": comp,
+            "n_steps": len(s),
+            "walltime_mean_s": s["walltime_s"].mean(),
+            "active_mean_s": s["active_s"].mean(),
+            "med_concurrent_mean_s": s["med_concurrent_s"].mean(),
+            "med_serial_mean_s": s["med_serial_s"].mean(),
+            "idle_on_med_s": idle_on_med.mean(),
+            "idle_on_component_s": idle_on_component.mean(),
+            "idle_on_med_steps": int((idle_on_med > 0).sum()),
+            "idle_on_component_steps": int((idle_on_component > 0).sum()),
+        }
+        interval = (
+            coupling_timestep_seconds.get(comp)
+            if isinstance(coupling_timestep_seconds, dict)
+            else coupling_timestep_seconds
+        )
+        if interval is not None:
+            row["seconds_per_sim_day"] = row["walltime_mean_s"] * 86400 / interval
+            if ncpus is not None:
+                row["core_hours_per_sim_year"] = ncpus * row["seconds_per_sim_day"] * days_per_year / 3600
+        rows.append(row)
+    return pd.DataFrame(rows).set_index("component")
