@@ -10,6 +10,7 @@ from access.esmf_trace.batch_runs import (
     JobFailure,
     _changed_settings,
     _display_path,
+    _find_traceout_dir,
     _output_fingerprint,
     _read_recorded_settings,
     run_batch_jobs,
@@ -26,6 +27,23 @@ def _defaults(**kwargs):
     }
     values.update(kwargs)
     return DefaultSettings(**values)
+
+
+class TestFindTraceoutDir:
+    def test_finds_archived_streams(self, tmp_path):
+        output_dir = tmp_path / "output000"
+        traceout = output_dir / "traceout"
+        traceout.mkdir(parents=True)
+
+        (traceout / "esmf_stream.tar").touch()
+
+        assert (
+            _find_traceout_dir(
+                output_dir,
+                "esmf_stream",
+            )
+            == traceout
+        )
 
 
 class _SerialFuture:

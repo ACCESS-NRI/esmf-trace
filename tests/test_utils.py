@@ -1,3 +1,4 @@
+import tarfile
 from pathlib import Path
 
 import pytest
@@ -10,7 +11,23 @@ from access.esmf_trace.utils import (
     normalise_str_list,
     output_dir_to_index,
     output_name_to_index,
+    stream_file_archive_path,
 )
+
+
+def _make_stream_archive(
+    traceout_path: Path,
+    stream_names: list[str],
+) -> Path:
+    archive_path = traceout_path / "esmf_stream.tar"
+
+    with tarfile.open(archive_path, "w") as archive:
+        for name in stream_names:
+            member = tarfile.TarInfo(name)
+            member.size = 0
+            archive.addfile(member)
+
+    return archive_path
 
 
 class TestOutputNameToIndex:
@@ -83,6 +100,45 @@ class TestDiscoverPetIndices:
 
     def test_no_matches_returns_empty_list(self, tmp_path):
         assert discover_pet_indices(tmp_path, "esmf_stream") == []
+
+    def test_discovers_pets_from_archive(self, tmp_path):
+        _make_stream_archive(
+            tmp_path,
+            [
+                "esmf_stream_0002",
+                "esmf_stream_0000",
+                "esmf_stream_0010",
+            ],
+        )
+
+        assert discover_pet_indices(tmp_path, "esmf_stream") == [0, 2, 10]
+
+    def test_discovers_loose_and_archived_pets(self, tmp_path):
+        _make_stream_archive(
+            tmp_path,
+            [
+                "esmf_stream_0000",
+                "esmf_stream_0001",
+            ],
+        )
+
+        (tmp_path / "esmf_stream_0002").touch()
+
+        assert discover_pet_indices(
+            tmp_path,
+            "esmf_stream",
+        ) == [0, 1, 2]
+
+
+class TestStreamFileArchivePath:
+    def test_stream_file_archive_path(self, tmp_path):
+        assert (
+            stream_file_archive_path(
+                tmp_path,
+                "esmf_stream",
+            )
+            == tmp_path.resolve() / "esmf_stream.tar"
+        )
 
 
 class TestConstructStreamPaths:

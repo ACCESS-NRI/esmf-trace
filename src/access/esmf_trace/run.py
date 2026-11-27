@@ -33,6 +33,7 @@ def run(ns: argparse.Namespace) -> tuple[int, str]:
         merge_adjacent=ns.merge_adjacent,
         merge_gap_ns=ns.merge_gap_ns,
         max_depth=ns.max_depth,
+        stream_prefix=ns.stream_prefix,
     )
 
     model_component = None

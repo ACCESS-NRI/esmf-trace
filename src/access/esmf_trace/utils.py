@@ -1,4 +1,4 @@
-from contextlib import suppress
+import tarfile
 from pathlib import Path
 
 
@@ -71,16 +71,56 @@ def extract_pets(pets_str: str | None) -> int | list[int] | None:
     return sorted(set(out))
 
 
-def discover_pet_indices(traceout_path: Path, prefix: str) -> list[int]:
+def stream_file_archive_path(
+    traceout_path: Path,
+    prefix: str = "esmf_stream",
+) -> Path:
     """
-    Discover pet indices from traceout directory.
+    Return the expected tar archive path
     """
     traceout_path = Path(traceout_path).expanduser().resolve()
-    pets = []
-    for p in traceout_path.glob(f"{prefix}_*"):
-        with suppress(ValueError):
-            pets.append(int(p.name.split("_")[-1]))
-    return sorted(set(pets))
+    return traceout_path / f"{prefix}.tar"
+
+
+def _stream_pet_index(name: str, prefix: str) -> int | None:
+    """
+    Extract a PET index from a stream file name like 'esmf_stream_0003' -> 3
+    """
+    if not name.startswith(f"{prefix}_"):
+        return None
+
+    try:
+        return int(name.rsplit("_", 1)[-1])
+    except ValueError:
+        return None
+
+
+def discover_pet_indices(traceout_path: Path, prefix: str) -> list[int]:
+    """
+    Discover pet indices from loose stream files and/or a stream tar archive
+    """
+    traceout_path = Path(traceout_path).expanduser().resolve()
+    pets = set()
+
+    # support loose stream files
+    for path in traceout_path.glob(f"{prefix}_*"):
+        pet = _stream_pet_index(path.name, prefix)
+        if pet is not None:
+            pets.add(pet)
+
+    # support stream files consolidated by om3-scripts/archive_esmf_streams.py
+    archive_path = stream_file_archive_path(traceout_path, prefix)
+    if archive_path.is_file():
+        with tarfile.open(archive_path, "r") as archive:
+            for member in archive.getmembers():
+                if not member.isfile():
+                    continue
+
+                pet = _stream_pet_index(member.name, prefix)
+                if pet is not None:
+                    pets.add(pet)
+
+    return sorted(pets)
 
 
 def construct_stream_paths(traceout_path: Path, pet_indices: list[int], prefix: str = "esmf_stream") -> list[Path]:

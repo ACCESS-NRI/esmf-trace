@@ -8,7 +8,7 @@ import psutil
 
 from .config import ConfigError, DefaultSettings, RunSettings
 from .run import run as single_run
-from .utils import extract_index_list_from_str, output_name_to_index
+from .utils import extract_index_list_from_str, output_name_to_index, stream_file_archive_path
 
 # Recording the settings a job's outputs were produced with written
 # next to them on success.
@@ -65,11 +65,19 @@ class BatchResult:
 
 def _find_traceout_dir(output_dir: Path, stream_prefix: str) -> Path | None:
     """
-    Return <outputNNN>/traceout if it exists and holds at least one
-    <stream_prefix>_* file, else None. This is the input a single job reads.
+    Return traceout if it contains loose streams or a stream archive.
     """
     tdir = output_dir / "traceout"
-    return tdir if (tdir.is_dir() and any(tdir.glob(f"{stream_prefix}_*"))) else None
+    if not tdir.is_dir():
+        return None
+
+    if any(tdir.glob(f"{stream_prefix}_*")):
+        return tdir
+
+    if stream_file_archive_path(tdir, stream_prefix).is_file():
+        return tdir
+
+    return None
 
 
 def _display_path(post_dir: Path, post_base_path: Path) -> str:
