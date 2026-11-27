@@ -155,7 +155,15 @@ class TestConstructStreamPaths:
     [
         ("0", [0]),
         ("3-5", [3, 4, 5]),
+        ("0,24-311:48", [0, 24, 72, 120, 168, 216, 264]),
+        ("3-5:1", [3, 4, 5]),
+        (" 2 - 9 : 3 ", [2, 5, 8]),
     ],
 )
 def test_extract_pets_parametrised(raw, expected):
     assert extract_pets(raw) == expected
+
+
+def test_extract_pets_rejects_non_positive_step():
+    with pytest.raises(ValueError, match="step must be >= 1"):
+        extract_pets("0-10:0")

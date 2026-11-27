@@ -100,7 +100,8 @@ class RunSettings:
     run_base, run_name, branch, archive: the alternative to exact_path, joined
         as run_base/run_name/branch/archive. `archive` defaults to "archive"
         and is only consulted in this form.
-    pets: PET indices to read, as a range string like "0,13" or "0,3-5". None
+    pets: PET indices to read, as a range string like "0,13", "0,3-5" or
+        "0,24-311:48" (every 48th PET from 24 to 311). None
         reads every stream file found in the traceout dir.
     model_component: component selector(s) to keep in the timeseries; falls
         back to DefaultSettings.model_component when unset.
