@@ -502,3 +502,40 @@ def _write_run_config(tmp_path, archive):
         cfg,
     )
     return cfg
+
+
+class TestStagingDir:
+    """
+    Streams read from esmf_stream.tar are unpacked while a job reads them. That
+    used to happen in TMPDIR, on a PBS job a small node-local /jobfs, which a
+    year of trace overflows - and PBS then kills the job (an interactive
+    session included). They now go to each job's post_dir unless set.
+    """
+
+    def _run(self, tmp_path, archive, **defaults_kwargs):
+        defaults = _defaults(post_base_path=str(tmp_path / "post"), **defaults_kwargs)
+        run_batch_jobs(defaults, [RunSettings(base_prefix="p", exact_path=archive)])
+
+    def test_defaults_to_the_jobs_post_dir(self, tmp_path, archive, serial_pool, writing_run):
+        self._run(tmp_path, archive)
+
+        assert writing_run[0].staging_dir == tmp_path / "post" / "postprocessing_p" / "output000"
+
+    def test_configured_staging_dir(self, tmp_path, archive, serial_pool, writing_run):
+        self._run(tmp_path, archive, staging_dir=str(tmp_path / "stage"))
+
+        assert writing_run[0].staging_dir == tmp_path / "stage"
+
+    def test_not_part_of_the_output_fingerprint(self, tmp_path, archive, serial_pool, writing_run, capsys):
+        # where streams are staged does not change what a job writes, so moving it reprocesses nothing
+        self._run(tmp_path, archive, staging_dir=str(tmp_path / "stage_a"))
+        self._run(tmp_path, archive, staging_dir=str(tmp_path / "stage_b"))
+
+        assert len(writing_run) == 1
+        recorded = _read_recorded_settings(tmp_path / "post" / "postprocessing_p" / "output000", "p")
+        assert "staging_dir" not in recorded
+
+    def test_cli_override(self, tmp_path):
+        ns = build_parser().parse_args(["run-from-yaml", "--config", "c.yaml", "--staging-dir", "/scratch/stage"])
+
+        assert ns.staging_dir == "/scratch/stage"
