@@ -42,7 +42,8 @@ def extract_index_list_from_str(s: str | None) -> list[int] | None:
 
 def _expand_from_str_to_list(str_of_ints) -> list[int]:
     """
-    Expand a str of int(s) like '5' or '3-7'into a list of ints.
+    Expand a str of int(s) like '5', '3-7' or '24-311:48' (every 48th from 24
+    up to 311) into a list of ints.
     """
     str_of_ints = str_of_ints.strip()
     if not str_of_ints:
@@ -50,15 +51,20 @@ def _expand_from_str_to_list(str_of_ints) -> list[int]:
 
     if "-" in str_of_ints:
         start_s, end_s = str_of_ints.split("-", 1)
+        end_s, _, step_s = end_s.partition(":")
+        step = int(step_s.strip()) if step_s.strip() else 1
+        if step < 1:
+            raise ValueError(f"Range step must be >= 1: {str_of_ints!r}")
         start = int(start_s.strip())
         end = int(end_s.strip())
-        return list(range(start, end + 1))
+        return list(range(start, end + 1, step))
     return [int(str_of_ints)]
 
 
 def extract_pets(pets_str: str | None) -> int | list[int] | None:
     """
-    Extract pet like '0,3-5,8' -> [0,3,4,5,8].
+    Extract pet like '0,3-5,8' -> [0,3,4,5,8], or with a step,
+    '0,24-311:48' -> [0,24,72,120,168,216,264].
     If pets_str is None or empty/whitespace, return None (meaning: all pets).
     """
     if pets_str is None or not pets_str.strip():
