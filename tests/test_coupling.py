@@ -140,6 +140,20 @@ def test_several_pets_report_the_slowest():
     pd.testing.assert_frame_equal(slow_only[shared], single[shared])
 
 
+def test_walltime_adds_up_to_the_elapsed_time():
+    # OCN PET 2 starts step 2 half a second late, so its step 1 is 0.5 s longer and its step 2 0.5 s shorter.
+    # The mean over the PETs keeps the total at the elapsed time; the largest per step would add 0.5 s.
+    df = _timeseries({"OCN": OCN_WORK}, speed={"OCN": (1.0, 1.0)})
+    calls = df.index[(df["pet"] == 2) & df["model_component"].str.endswith("/[OCN] RunPhase1")]
+    df.loc[calls[2], "start"] += NS // 2
+
+    walltime = coupling_steps(df)["walltime_s"]
+    single = coupling_steps(_timeseries({"OCN": OCN_WORK}))["walltime_s"]
+    starts = df.loc[calls, "start"]
+    assert walltime.sum() == pytest.approx((starts.iloc[-1] - starts.iloc[0]) / NS)
+    assert walltime.tolist() == pytest.approx([single[0], single[1] + 0.25, single[2] - 0.25, single[3]])
+
+
 def test_unequal_event_counts_raise():
     df = _timeseries({"OCN": [1.0, 1.0, 1.0]})
     df = df.drop(df[(df["pet"] == 1) & df["model_component"].str.endswith("[OCN] RunPhase1")].index[-1])

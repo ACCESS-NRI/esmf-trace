@@ -18,7 +18,7 @@ counts as MED-side work.
 
 | Column | Meaning |
 |---|---|
-| `walltime_s` | Time from one `[X]` call to the next on the X PET |
+| `walltime_s` | Time from one `[X]` call to the next, averaged over the X PETs |
 | `active_s` | Duration of the `[X]` run phase |
 | `wait_s` | X idle in the next `[MED-TO-X]`, waiting for the MED side |
 | `med_wait_s` | MED side idle in `[X-TO-MED]`, waiting for X |
@@ -28,6 +28,9 @@ counts as MED-side work.
 
 Every value is a timestamp difference on a single PET, so clocks on different nodes are never compared. With several
 PETs on a side, each step keeps the slowest PET: the smallest wait and the largest active, concurrent and serial time.
+`walltime_s` is the exception. The PETs of X start each step together, up to jitter: a PET that starts one step late
+starts the next one early. Their mean therefore adds up to the elapsed time, whereas the largest value per step would
+add up to more.
 
 ## Input
 

@@ -110,6 +110,8 @@ def _component_steps(events: pd.DataFrame, comp: str, comp_pets: list[int], med_
     wait = to_comp_at_comp["duration_s"][1:].astype(float)
     med_wait = from_comp_at_med["duration_s"][:n].astype(float)
     med_window_start = to_comp_at_med["end"].astype("int64")
+    # The PETs of X start each step together, up to jitter: a PET that starts one step late starts
+    # the next one early. Their mean step therefore adds up to the elapsed time; the max would not.
     walltime = np.diff(run["start"].astype("int64"), axis=0).mean(axis=1) / seconds_to_nanoseconds
     med_concurrent = (from_comp_at_med["start"][:n] - med_window_start[:n]) / seconds_to_nanoseconds
     med_serial = (to_comp_at_med["start"][1:] - from_comp_at_med["end"][:n]) / seconds_to_nanoseconds
@@ -161,7 +163,9 @@ def coupling_steps(
         string such as "24-311:48"; a tag left out uses every qualifying PET
         in the frame. With several PETs on a side, each step keeps the slowest
         PET: the smallest wait (the time that side really waited for the
-        other), and the largest active/concurrent/serial time.
+        other), and the largest active/concurrent/serial time. walltime_s is
+        the mean over the component's PETs instead: they start each step
+        together, so the mean adds up to the elapsed time.
     start_index, end_index: iloc slice of each component's steps, e.g. 2 and
         -1 to drop two warm-up steps and the final output boundary.
 
