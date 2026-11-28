@@ -259,6 +259,20 @@ def coupling_summary(
         job's allocation, which the trace cannot tell).
     """
     timing = [column for column in steps.columns if column.endswith("_s")]
+    columns = [
+        "component",
+        "n_steps",
+        *(f"{column[:-2]}_mean_s" for column in timing),
+        "idle_on_med_s",
+        "idle_on_component_s",
+        "idle_on_med_steps",
+        "idle_on_component_steps",
+    ]
+    if coupling_timestep_seconds is not None:
+        columns.append("seconds_per_sim_day")
+        if ncpus is not None:
+            columns.append("core_hours_per_sim_year")
+
     rows = []
     for comp, s in steps.groupby("component", sort=False):
         idle_on_med = (s["med_concurrent_s"] - s["active_s"]).clip(lower=0)
@@ -282,4 +296,5 @@ def coupling_summary(
             if ncpus is not None:
                 row["core_hours_per_sim_year"] = ncpus * row["seconds_per_sim_day"] * days_per_year / 3600
         rows.append(row)
-    return pd.DataFrame(rows).set_index("component")
+    # with no steps (e.g. a slice that dropped them all) this is an empty frame with the same columns
+    return pd.DataFrame(rows, columns=columns).set_index("component")

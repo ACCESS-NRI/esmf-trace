@@ -190,6 +190,19 @@ def test_summary_means_every_timing_column():
     assert summary.loc["OCN", "ice_active_mean_s"] == pytest.approx(ICE_S)
 
 
+def test_summary_of_no_steps():
+    # two coupling calls make one step, which end_index=-1 drops
+    steps = coupling_steps(_timeseries({"OCN": [1.0, 1.0]}), end_index=-1)
+    assert steps.empty
+
+    summary = coupling_summary(steps, coupling_timestep_seconds=3600, ncpus=10)
+    assert summary.empty
+    assert summary.index.name == "component"
+    assert {"n_steps", "walltime_mean_s", "wait_mean_s", "idle_on_med_s", "core_hours_per_sim_year"} <= set(
+        summary.columns
+    )
+
+
 def test_steps_for_case(tmp_path):
     for index in (0, 1):
         out = tmp_path / "postprocessing_case" / f"output{index:03d}"
