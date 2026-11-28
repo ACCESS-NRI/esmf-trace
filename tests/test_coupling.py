@@ -180,6 +180,16 @@ def test_summary():
     assert summary.loc["WAV", "idle_on_component_steps"] == 0
 
 
+def test_summary_means_every_timing_column():
+    steps = coupling_steps(_timeseries({"OCN": OCN_WORK}))
+    summary = coupling_summary(steps)
+
+    timing = ["walltime_s", "active_s", "wait_s", "med_concurrent_s", "med_wait_s", "med_serial_s", "ice_active_s"]
+    for column in timing:
+        assert summary.loc["OCN", f"{column[:-2]}_mean_s"] == pytest.approx(steps[column].mean())
+    assert summary.loc["OCN", "ice_active_mean_s"] == pytest.approx(ICE_S)
+
+
 def test_steps_for_case(tmp_path):
     for index in (0, 1):
         out = tmp_path / "postprocessing_case" / f"output{index:03d}"

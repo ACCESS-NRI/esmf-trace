@@ -67,7 +67,8 @@ summary = coupling_summary(steps, coupling_timestep_seconds=3600, ncpus=288)
 `coupling_steps(df, ...)` does the same for one timeseries frame. `components=None` analyses every component on PETs
 apart from MED. `pets={"MED": 0, "OCN": "24-311:48"}` chooses PETs per component.
 
-`coupling_summary` gives one row per component: the mean of each column, and
+`coupling_summary` gives one row per component: the mean of each timing column as `<column>_mean_s` (e.g.
+`wait_mean_s`, `ice_active_mean_s`), and
 
 - `idle_on_med_s` / `idle_on_component_s`: mean seconds per step that one side sat idle because the other side's
   overlapping work was longer. This is the most that giving the slower side more PETs could save.

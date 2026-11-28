@@ -240,8 +240,9 @@ def coupling_summary(
     Summarise coupling_steps() output, one row per component: who waits for
     whom, and how much walltime each side could still recover.
 
-    walltime_mean_s, active_mean_s, med_concurrent_mean_s, med_serial_mean_s:
-        mean per step of the matching coupling_steps() column.
+    <column>_mean_s: mean per step of every timing column (*_s) of
+        coupling_steps(), e.g. walltime_mean_s, wait_mean_s, med_wait_mean_s
+        and ice_active_mean_s.
     idle_on_med_s / idle_on_component_s: mean seconds per step that the
         component sat idle because the MED side's overlapping work
         (med_concurrent_s) ran past its own (active_s), and the reverse. Only
@@ -257,6 +258,7 @@ def coupling_summary(
         intervals. core_hours_per_sim_year additionally needs ncpus (the whole
         job's allocation, which the trace cannot tell).
     """
+    timing = [column for column in steps.columns if column.endswith("_s")]
     rows = []
     for comp, s in steps.groupby("component", sort=False):
         idle_on_med = (s["med_concurrent_s"] - s["active_s"]).clip(lower=0)
@@ -264,10 +266,7 @@ def coupling_summary(
         row = {
             "component": comp,
             "n_steps": len(s),
-            "walltime_mean_s": s["walltime_s"].mean(),
-            "active_mean_s": s["active_s"].mean(),
-            "med_concurrent_mean_s": s["med_concurrent_s"].mean(),
-            "med_serial_mean_s": s["med_serial_s"].mean(),
+            **{f"{column[:-2]}_mean_s": s[column].mean() for column in timing},
             "idle_on_med_s": idle_on_med.mean(),
             "idle_on_component_s": idle_on_component.mean(),
             "idle_on_med_steps": int((idle_on_med > 0).sum()),
