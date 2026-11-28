@@ -61,9 +61,9 @@ def _run_tag(path: str) -> str | None:
 def _select_pets(requested: int | str | list[int] | None, candidates: set[int], role: str) -> list[int]:
     if not candidates:
         raise ValueError(f"No {role} PET found in the timeseries")
-    if requested is None:
-        return sorted(candidates)
     pets = _norm_pets(requested)
+    if pets is None:  # None or a blank range string: every PET, as in RunSettings.pets
+        return sorted(candidates)
     unknown = set(pets) - candidates
     if unknown:
         raise ValueError(f"PET(s) {sorted(unknown)} are not {role} PETs; candidates: {sorted(candidates)}")

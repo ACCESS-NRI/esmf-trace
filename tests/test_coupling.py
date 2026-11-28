@@ -127,6 +127,14 @@ def test_slice_and_explicit_pets():
         coupling_steps(_timeseries({"OCN": [1.0, 1.0]}), pets={"MED": 1})
 
 
+def test_blank_pet_range_selects_every_pet():
+    # extract_pets reads a blank range as "all PETs", as RunSettings.pets does
+    df = _timeseries({"OCN": OCN_WORK}, speed={"OCN": (1.0, 0.8)}, n_med=2)
+    expected = coupling_steps(df)
+    for blank in ("", "   "):
+        pd.testing.assert_frame_equal(coupling_steps(df, pets={"MED": blank, "OCN": blank}), expected)
+
+
 def test_several_pets_report_the_slowest():
     single = coupling_steps(_timeseries({"OCN": OCN_WORK}))
     several = coupling_steps(_timeseries({"OCN": OCN_WORK}, speed={"OCN": (1.0, 0.8)}, n_med=2))
